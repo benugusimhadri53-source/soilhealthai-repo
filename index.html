@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Soil Health AI — Standalone Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --loam:#2e2016;
+    --topsoil:#5c3d26;
+    --moss:#41613a;
+    --moss-dark:#324d2d;
+    --wheat:#b9861f;
+    --clay:#9c3c2b;
+    --chalk:#f3ede0;
+    --chalk-2:#eae1cf;
+    --stone:#d6cbb2;
+    --paper:#fbf8f2;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    font-family:'IBM Plex Sans',sans-serif;
+    background:var(--chalk);
+    color:var(--loam);
+  }
+  h1,h2,h3{font-family:'Fraunces',serif; margin:0;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+
+  /* ---------- NAV ---------- */
+  nav{
+    position:sticky; top:0; z-index:50;
+    background:var(--loam);
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 22px;
+    flex-wrap:wrap; gap:10px;
+  }
+  nav .brand{
+    color:var(--chalk); font-family:'Fraunces',serif; font-weight:700;
+    font-size:1.2em; letter-spacing:0.2px; cursor:pointer; border:none; background:none;
+  }
+  nav .brand span{color:#8fae6c;}
+  nav .tabs{display:flex; gap:4px;}
+  nav .tabs button{
+    background:none; border:none; color:#cbbfa5; padding:8px 14px;
+    font-family:'IBM Plex Sans',sans-serif; font-size:0.92em; font-weight:500;
+    cursor:pointer; border-radius:6px; transition:background 0.15s, color 0.15s;
+  }
+  nav .tabs button:hover{background:rgba(255,255,255,0.08); color:var(--chalk);}
+  nav .tabs button.active{background:var(--moss); color:white;}
+
+  main{max-width:1040px; margin:0 auto; padding:0 20px 60px;}
+  .view{display:none;}
+  .view.active{display:block;}
+
+  /* ---------- HOME ---------- */
+  .hero{
+    padding:64px 0 40px; text-align:left;
+    display:grid; grid-template-columns:1.3fr 1fr; gap:36px; align-items:center;
+  }
+  @media(max-width:760px){ .hero{grid-template-columns:1fr; padding:36px 0 20px;} }
+  .hero h1{font-size:2.5em; line-height:1.12; font-weight:600; color:var(--loam);}
+  .hero h1 em{font-style:italic; color:var(--moss-dark);}
+  .hero p{color:#5a4c3c; font-size:1.05em; line-height:1.6; max-width:46ch; margin-top:16px;}
+  .cta-row{margin-top:26px; display:flex; gap:12px; flex-wrap:wrap;}
+  .btn{
+    display:inline-block; padding:13px 24px; border-radius:8px; border:none;
+    font-family:'IBM Plex Sans',sans-serif; font-weight:600; font-size:0.96em;
+    cursor:pointer; text-decoration:none; transition:transform 0.12s, box-shadow 0.12s;
+  }
+  .btn:active{transform:scale(0.98);}
+  .btn-primary{background:var(--moss); color:white;}
+  .btn-primary:hover{background:var(--moss-dark);}
+  .btn-ghost{background:transparent; color:var(--loam); border:1.5px solid var(--stone);}
+  .btn-ghost:hover{border-color:var(--loam);}
+
+  /* signature element: soil horizon / core-sample strip */
+  .core-sample{
+    position:relative; border-radius:10px; overflow:hidden;
+    box-shadow:0 8px 24px rgba(46,32,22,0.18);
+    border:1px solid var(--stone);
+    display:flex; height:340px;
+  }
+  .core-sample .depth-rule{
+    width:34px; background:var(--paper); border-right:1px solid var(--stone);
+    display:flex; flex-direction:column; justify-content:space-between;
+    padding:8px 0; font-size:0.68em; color:#8a7a63; text-align:center;
+  }
+  .core-sample .strata{flex:1; display:flex; flex-direction:column;}
+  .horizon{
+    flex:1; display:flex; align-items:center; padding:0 16px;
+    color:white; font-size:0.85em; font-weight:500;
+    border-top:1px solid rgba(255,255,255,0.15);
+  }
+  .horizon .tag{
+    font-family:'IBM Plex Mono',monospace; font-weight:600; margin-right:10px;
+    opacity:0.85; font-size:0.9em;
+  }
+  .h-o{background:#4a3524; flex:0.7;}
+  .h-a{background:#6b4226; flex:1.1;}
+  .h-b{background:#8a5a34; flex:1.3;}
+  .h-c{background:#a9744a; flex:1;}
+
+  /* how it works, mapped onto horizon layers */
+  .how{padding:30px 0 10px;}
+  .how h2{font-size:1.6em; margin-bottom:6px;}
+  .how > p{color:#6b5c48; margin-top:6px;}
+  .steps{display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:26px;}
+  @media(max-width:760px){.steps{grid-template-columns:1fr;}}
+  .step{
+    background:var(--paper); border:1px solid var(--stone); border-radius:10px;
+    padding:20px; border-left:5px solid var(--moss);
+  }
+  .step:nth-child(2){border-left-color:var(--wheat);}
+  .step:nth-child(3){border-left-color:var(--clay);}
+  .step .layer-tag{font-family:'IBM Plex Mono',monospace; font-size:0.78em; color:#8a7a63; letter-spacing:0.5px;}
+  .step h3{font-size:1.08em; margin-top:6px; color:var(--loam);}
+  .step p{font-size:0.9em; color:#6b5c48; margin-top:6px; line-height:1.5;}
+
+  /* ---------- DASHBOARD ---------- */
+  .dash{display:grid; grid-template-columns:1fr; gap:24px; padding-top:34px;}
+  @media(min-width:860px){ .dash{grid-template-columns:0.9fr 1.1fr;} }
+  .panel{
+    background:var(--paper); border:1px solid var(--stone); border-radius:12px; padding:24px;
+  }
+  .panel h2{font-size:1.25em; margin-bottom:4px;}
+  .panel .sub{font-size:0.85em; color:#8a7a63; margin-bottom:16px;}
+  label{display:block; margin-top:14px; font-size:0.85em; font-weight:600; color:var(--loam);}
+  input,select{
+    width:100%; padding:10px 11px; margin-top:5px; border:1px solid var(--stone);
+    border-radius:7px; font-size:0.95em; font-family:'IBM Plex Mono',monospace;
+    background:white; color:var(--loam);
+  }
+  select{font-family:'IBM Plex Sans',sans-serif;}
+  input:focus,select:focus{outline:2px solid var(--moss); outline-offset:1px; border-color:var(--moss);}
+
+  /* ---------- VALIDATION ---------- */
+  input.invalid,select.invalid{border-color:var(--clay); background:#fdf3f1;}
+  input.invalid:focus,select.invalid:focus{outline-color:var(--clay);}
+  .field-error{
+    display:none; color:var(--clay); font-size:0.78em; margin-top:5px;
+    font-family:'IBM Plex Sans',sans-serif; line-height:1.4;
+  }
+  .field-error.show{display:block;}
+  .form-banner-error{
+    display:none; background:#fbeae6; border:1px solid #e0b3a8; color:#8a3222;
+    border-radius:8px; padding:10px 14px; font-size:0.85em; margin-top:16px; line-height:1.5;
+  }
+  .form-banner-error.show{display:block;}
+
+  /* ---------- PHOTO UPLOAD ---------- */
+  .photo-drop{
+    margin-top:5px; border:1.5px dashed var(--stone); border-radius:9px;
+    background:white; padding:16px; text-align:center; cursor:pointer;
+    transition:border-color 0.15s, background 0.15s;
+    position:relative;
+  }
+  .photo-drop:hover, .photo-drop.dragover{border-color:var(--moss); background:#f6f4ec;}
+  .photo-drop.invalid-drop{border-color:var(--clay); background:#fdf3f1;}
+  .photo-drop input[type="file"]{
+    position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%;
+  }
+  .photo-drop .drop-icon{font-size:1.5em; margin-bottom:4px;}
+  .photo-drop .drop-text{font-size:0.85em; color:#8a7a63; font-family:'IBM Plex Sans',sans-serif;}
+  .photo-drop .drop-text strong{color:var(--moss-dark);}
+  .photo-preview-wrap{
+    display:none; margin-top:10px; position:relative;
+    border:1px solid var(--stone); border-radius:9px; overflow:hidden; background:white;
+  }
+  .photo-preview-wrap img{
+    display:block; width:100%; max-height:160px; object-fit:cover;
+  }
+  .photo-preview-wrap .photo-meta{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:8px 12px; font-size:0.8em; color:#6b5c48; background:var(--chalk-2);
+  }
+  .photo-preview-wrap .photo-remove{
+    background:none; border:none; color:var(--clay); font-weight:600;
+    cursor:pointer; font-size:0.85em; font-family:'IBM Plex Sans',sans-serif;
+  }
+
+  .placeholder{
+    text-align:center; color:#a99c86; font-style:italic; padding:50px 10px; font-size:0.95em;
+  }
+  .score-strip{display:flex; align-items:stretch; height:64px; border-radius:8px; overflow:hidden; margin:14px 0 6px; border:1px solid var(--stone);}
+  .score-strip .fill{display:flex; align-items:center; justify-content:center; color:white; font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:1.3em;}
+  .score-strip .rest{background:var(--chalk-2);}
+
+  .status-Low{color:var(--clay); font-weight:600;}
+  .status-Medium{color:var(--wheat); font-weight:600;}
+  .status-High{color:var(--moss-dark); font-weight:600;}
+
+  table{width:100%; border-collapse:collapse; margin-top:8px;}
+  td,th{padding:8px 4px; border-bottom:1px solid var(--stone); font-size:0.9em; text-align:left;}
+  th{color:#8a7a63; font-weight:600; font-size:0.78em; text-transform:uppercase; letter-spacing:0.4px;}
+
+  .report-photo{
+    width:100%; max-height:190px; object-fit:cover; border-radius:9px;
+    border:1px solid var(--stone); margin-bottom:16px;
+  }
+
+  .dosage-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:12px;}
+  .dosage-card{background:var(--chalk-2); border-radius:8px; padding:12px; text-align:center;}
+  .dosage-card .label{font-size:0.78em; color:#6b5c48; text-transform:uppercase; letter-spacing:0.4px;}
+  .dosage-card .val{font-family:'IBM Plex Mono',monospace; font-size:1.15em; font-weight:600; color:var(--moss-dark); margin-top:4px;}
+
+  .amend-tag{
+    display:inline-block; background:#f3e3c9; color:#7a5316; padding:4px 11px;
+    border-radius:6px; font-size:0.82em; margin-right:6px; margin-top:8px; font-weight:500;
+  }
+  ul.notes{padding-left:18px; margin-top:8px;}
+  ul.notes li{margin-bottom:7px; font-size:0.9em; line-height:1.5; color:#463a2c;}
+
+  .info-banner{
+    background:#eef2e8; border:1px solid #c9d6bc; color:#3f4f37;
+    border-radius:8px; padding:12px 16px; font-size:0.86em; margin-bottom:20px; line-height:1.5;
+  }
+
+  /* ---------- HISTORY ---------- */
+  .hist-wrap{padding-top:34px;}
+  .empty-state{
+    text-align:center; padding:60px 20px; color:#8a7a63;
+  }
+  .empty-state .glyph{font-size:2.4em; margin-bottom:10px;}
+  .hist-thumb{
+    width:38px; height:38px; border-radius:6px; object-fit:cover; border:1px solid var(--stone);
+    vertical-align:middle;
+  }
+  .hist-thumb-empty{
+    width:38px; height:38px; border-radius:6px; background:var(--chalk-2);
+    display:inline-block; vertical-align:middle;
+  }
+
+  footer{text-align:center; padding:22px; color:#a99c86; font-size:0.82em;}
+</style>
+</head>
+<body>
+
+<nav>
+  <button class="brand" onclick="showView('home')">Soil<span>Health</span> AI</button>
+  <div class="tabs">
+    <button data-tab="home" class="active" onclick="showView('home')">Home</button>
+    <button data-tab="dashboard" onclick="showView('dashboard')">Dashboard</button>
+    <button data-tab="history" onclick="showView('history')">History</button>
+  </div>
+</nav>
+
+<main>
+
+  <!-- ============ HOME ============ -->
+  <section id="view-home" class="view active">
+    <div class="hero">
+      <div>
+        <h1>Read your soil<br><em>like a core sample.</em></h1>
+        <p>Enter a soil test and get an instant AI-generated health card — nutrient status, pH advisory, and precise Urea / DAP / MOP dosage for your crop, laid out the way an agronomist reads a soil profile.</p>
+        <div class="cta-row">
+          <button class="btn btn-primary" onclick="showView('dashboard')">Open Dashboard →</button>
+          <button class="btn btn-ghost" onclick="document.getElementById('how').scrollIntoView()">How it works</button>
+        </div>
+      </div>
+      <div class="core-sample" aria-hidden="true">
+        <div class="depth-rule">
+          <span>0cm</span><span>15</span><span>30</span><span>45cm+</span>
+        </div>
+        <div class="strata">
+          <div class="horizon h-o"><span class="tag">O</span> Organic layer</div>
+          <div class="horizon h-a"><span class="tag">A</span> Topsoil — N·P·K</div>
+          <div class="horizon h-b"><span class="tag">B</span> Subsoil — pH·EC</div>
+          <div class="horizon h-c"><span class="tag">C</span> Parent material</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="how" id="how">
+      <h2>Three layers to a recommendation</h2>
+      <p>Same structure as reading an actual soil core, top to bottom.</p>
+      <div class="steps">
+        <div class="step">
+          <div class="layer-tag">HORIZON O — INPUT</div>
+          <h3>Enter your soil test</h3>
+          <p>N, P, K, pH, organic carbon, your crop — and optionally a field photo. Takes under a minute.</p>
+        </div>
+        <div class="step">
+          <div class="layer-tag">HORIZON A — ANALYSIS</div>
+          <h3>Rules trained into the model</h3>
+          <p>The same agronomic thresholds (ICAR-style) used to train the backend ML model classify each nutrient and calculate dosage.</p>
+        </div>
+        <div class="step">
+          <div class="layer-tag">HORIZON B — OUTPUT</div>
+          <h3>Get your health card</h3>
+          <p>A soil health score, nutrient status, and exact fertilizer kg/acre — plus plain-language advisory notes.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ DASHBOARD ============ -->
+  <section id="view-dashboard" class="view">
+    <div class="info-banner">
+      🌾 This is a standalone, browser-only demo — it runs the same agronomic rule engine that generated the training data for the full AI backend. No sign-in, no data leaves your browser, and nothing is saved after you close the tab (see History tab for this session only).
+    </div>
+    <div class="dash">
+      <div class="panel">
+        <h2>Soil Test Input</h2>
+        <div class="sub">Values in kg/ha unless noted</div>
+        <form id="soilForm">
+          <label>Crop</label>
+          <select id="crop">
+            <option>Rice</option><option>Wheat</option><option>Maize</option>
+            <option>Cotton</option><option>Sugarcane</option><option>Groundnut</option>
+            <option>Pulses</option><option>Vegetables</option>
+          </select>
+
+          <label>Nitrogen — N (kg/ha)</label>
+          <input type="number" id="N" step="0.1" value="220" min="0" max="1000" required>
+          <div class="field-error" id="err-N"></div>
+
+          <label>Phosphorus — P (kg/ha)</label>
+          <input type="number" id="P" step="0.1" value="14" min="0" max="300" required>
+          <div class="field-error" id="err-P"></div>
+
+          <label>Potassium — K (kg/ha)</label>
+          <input type="number" id="K" step="0.1" value="160" min="0" max="1000" required>
+          <div class="field-error" id="err-K"></div>
+
+          <label>Soil pH</label>
+          <input type="number" id="pH" step="0.01" value="6.2" min="0" max="14" required>
+          <div class="field-error" id="err-pH"></div>
+
+          <label>Organic Carbon — OC (%)</label>
+          <input type="number" id="OC" step="0.01" value="0.45" min="0" max="20" required>
+          <div class="field-error" id="err-OC"></div>
+
+          <label>Soil / Field Photo (optional)</label>
+          <div class="photo-drop" id="photoDrop">
+            <div class="drop-icon">📷</div>
+            <div class="drop-text"><strong>Tap to upload</strong> or drag a photo here</div>
+            <input type="file" id="photoInput" accept="image/*">
+          </div>
+          <div class="photo-preview-wrap" id="photoPreviewWrap">
+            <img id="photoPreviewImg" alt="Uploaded soil photo preview">
+            <div class="photo-meta">
+              <span id="photoFileName" class="mono"></span>
+              <button type="button" class="photo-remove" id="photoRemoveBtn">Remove</button>
+            </div>
+          </div>
+          <div class="field-error" id="err-photo"></div>
+
+          <div class="form-banner-error" id="formBannerError">Please fix the highlighted fields before generating the report.</div>
+
+          <button type="submit" class="btn btn-primary" style="width:100%; margin-top:20px;">Generate Soil Health Card</button>
+        </form>
+      </div>
+
+      <div class="panel">
+        <h2>Soil Health Report</h2>
+        <div id="placeholder" class="placeholder">Fill in the soil values and generate your card — the result appears here.</div>
+        <div id="results" style="display:none;"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ HISTORY ============ -->
+  <section id="view-history" class="view">
+    <div class="hist-wrap">
+      <div class="panel">
+        <h2>Session History</h2>
+        <div class="sub">Only stored in this browser tab for this session — refreshing clears it.</div>
+        <div id="historyBody">
+          <div class="empty-state">
+            <div class="glyph">📋</div>
+            No soil tests generated yet in this session.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>AI-Driven Soil Health Card & Fertilizer Recommendation — standalone browser demo</footer>
+
+<script>
+// ---------- view switching ----------
+function showView(name){
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + name).classList.add('active');
+  document.querySelectorAll('nav .tabs button').forEach(b => b.classList.remove('active'));
+  document.querySelector(`nav .tabs button[data-tab="${name}"]`).classList.add('active');
+}
+
+// ---------- field validation ----------
+const FIELD_RULES = {
+  N:  {label:"Nitrogen",       min:0, max:1000},
+  P:  {label:"Phosphorus",     min:0, max:300},
+  K:  {label:"Potassium",      min:0, max:1000},
+  pH: {label:"Soil pH",        min:0, max:14},
+  OC: {label:"Organic carbon", min:0, max:20},
+};
+
+function validateField(id){
+  const rule = FIELD_RULES[id];
+  const input = document.getElementById(id);
+  const errEl = document.getElementById('err-' + id);
+  const raw = input.value.trim();
+
+  let message = '';
+  if(raw === ''){
+    message = `${rule.label} is required.`;
+  } else {
+    const val = parseFloat(raw);
+    if(Number.isNaN(val)){
+      message = `${rule.label} must be a number.`;
+    } else if(val < rule.min || val > rule.max){
+      message = `${rule.label} should be between ${rule.min} and ${rule.max}.`;
+    }
+  }
+
+  if(message){
+    input.classList.add('invalid');
+    errEl.textContent = message;
+    errEl.classList.add('show');
+    return false;
+  } else {
+    input.classList.remove('invalid');
+    errEl.classList.remove('show');
+    return true;
+  }
+}
+
+Object.keys(FIELD_RULES).forEach(id => {
+  const input = document.getElementById(id);
+  input.addEventListener('input', () => validateField(id));
+  input.addEventListener('blur', () => validateField(id));
+});
+
+function validateAllFields(){
+  const results = Object.keys(FIELD_RULES).map(id => validateField(id));
+  return results.every(ok => ok);
+}
+
+// ---------- photo upload handling ----------
+let currentPhotoDataUrl = null;
+let currentPhotoName = null;
+
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5MB
+const ALLOWED_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+
+const photoDrop = document.getElementById('photoDrop');
+const photoInput = document.getElementById('photoInput');
+const photoPreviewWrap = document.getElementById('photoPreviewWrap');
+const photoPreviewImg = document.getElementById('photoPreviewImg');
+const photoFileName = document.getElementById('photoFileName');
+const photoRemoveBtn = document.getElementById('photoRemoveBtn');
+const photoError = document.getElementById('err-photo');
+
+function showPhotoError(message){
+  photoError.textContent = message;
+  photoError.classList.add('show');
+  photoDrop.classList.add('invalid-drop');
+}
+function clearPhotoError(){
+  photoError.textContent = '';
+  photoError.classList.remove('show');
+  photoDrop.classList.remove('invalid-drop');
+}
+
+function handlePhotoFile(file){
+  clearPhotoError();
+  if(!file){ return; }
+
+  const isAllowedType = file.type.startsWith('image/');
+  if(!isAllowedType){
+    showPhotoError('Please upload an image file (JPG, PNG, WEBP, or HEIC).');
+    photoInput.value = '';
+    return;
+  }
+  if(file.size > MAX_PHOTO_BYTES){
+    const sizeMb = (file.size / (1024*1024)).toFixed(1);
+    showPhotoError(`Image is ${sizeMb}MB — please upload a photo under 5MB.`);
+    photoInput.value = '';
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onerror = function(){
+    showPhotoError('Could not read that file — please try a different photo.');
+  };
+  reader.onload = function(e){
+    currentPhotoDataUrl = e.target.result;
+    currentPhotoName = file.name;
+    photoPreviewImg.src = currentPhotoDataUrl;
+    photoFileName.textContent = file.name;
+    photoPreviewWrap.style.display = 'block';
+    photoDrop.style.display = 'none';
+  };
+  reader.readAsDataURL(file);
+}
+
+photoInput.addEventListener('change', function(e){
+  if(e.target.files && e.target.files[0]) handlePhotoFile(e.target.files[0]);
+});
+
+// drag & drop support
+['dragover','dragenter'].forEach(evt => {
+  photoDrop.addEventListener(evt, function(e){
+    e.preventDefault();
+    photoDrop.classList.add('dragover');
+  });
+});
+['dragleave','drop'].forEach(evt => {
+  photoDrop.addEventListener(evt, function(e){
+    e.preventDefault();
+    photoDrop.classList.remove('dragover');
+  });
+});
+photoDrop.addEventListener('drop', function(e){
+  e.preventDefault();
+  photoDrop.classList.remove('dragover');
+  if(e.dataTransfer.files && e.dataTransfer.files[0]) handlePhotoFile(e.dataTransfer.files[0]);
+});
+
+photoRemoveBtn.addEventListener('click', function(){
+  currentPhotoDataUrl = null;
+  currentPhotoName = null;
+  photoInput.value = '';
+  clearPhotoError();
+  photoPreviewWrap.style.display = 'none';
+  photoDrop.style.display = 'block';
+});
+
+// ---------- agronomic rule engine (mirrors the Python training-data generator) ----------
+const CROP_GRD = {
+  Rice:       {N:48, P:24, K:24},
+  Wheat:      {N:48, P:24, K:16},
+  Maize:      {N:60, P:30, K:20},
+  Cotton:     {N:40, P:20, K:20},
+  Sugarcane:  {N:100, P:40, K:40},
+  Groundnut:  {N:10, P:20, K:20},
+  Pulses:     {N:8, P:20, K:12},
+  Vegetables: {N:50, P:25, K:25},
+};
+
+function classify(value, low, high){
+  if(value < low) return "Low";
+  if(value < high) return "Medium";
+  return "High";
+}
+function phStatus(ph){
+  if(ph < 6.5) return "Acidic";
+  if(ph <= 7.5) return "Neutral";
+  return "Alkaline";
+}
+function adjustFactor(level){
+  return {Low:1.25, Medium:1.0, High:0.5}[level];
+}
+function healthScore(levels){
+  const w = {Low:0.3, Medium:0.7, High:1.0};
+  const avg = levels.reduce((s,l) => s + w[l], 0) / levels.length;
+  return Math.round(avg * 1000) / 10;
+}
+function buildNotes(levels, phStat, OC){
+  const notes = [];
+  if(levels.N === "Low") notes.push("Nitrogen is low — split urea application into 2-3 doses to reduce leaching loss.");
+  if(levels.P === "Low") notes.push("Phosphorus is low — apply DAP at sowing time, placed near root zone.");
+  if(levels.K === "Low") notes.push("Potassium is low — apply MOP in split doses, especially before flowering stage.");
+  if(phStat === "Acidic") notes.push("Soil is acidic — apply agricultural lime a few weeks before sowing to raise pH.");
+  if(phStat === "Alkaline") notes.push("Soil is alkaline — apply gypsum and use acid-forming fertilizers like ammonium sulfate.");
+  if(OC < 0.5) notes.push("Organic carbon is low — add farmyard manure or compost (5-10 tons/acre) to improve soil structure.");
+  if(notes.length === 0) notes.push("Soil is in good condition. Maintain current practices with balanced fertilization.");
+  return notes;
+}
+
+function recommend(crop, N, P, K, pH, OC){
+  const nLevel = classify(N, 280, 560);
+  const pLevel = classify(P, 10, 25);
+  const kLevel = classify(K, 110, 280);
+  const phStat = phStatus(pH);
+
+  const grd = CROP_GRD[crop];
+  const recN = grd.N * adjustFactor(nLevel);
+  const recP = grd.P * adjustFactor(pLevel);
+  const recK = grd.K * adjustFactor(kLevel);
+
+  const dapKg = recP / 0.46;
+  const dapNContrib = dapKg * 0.18;
+  const ureaKg = Math.max(recN - dapNContrib, 0) / 0.46;
+  const mopKg = recK / 0.60;
+
+  return {
+    levels: {N: nLevel, P: pLevel, K: kLevel},
+    phStat,
+    score: healthScore([nLevel, pLevel, kLevel]),
+    dosage: {
+      urea: Math.round(ureaKg * 10) / 10,
+      dap: Math.round(dapKg * 10) / 10,
+      mop: Math.round(mopKg * 10) / 10,
+    },
+    lime: phStat === "Acidic",
+    gypsum: phStat === "Alkaline",
+    notes: buildNotes({N:nLevel, P:pLevel, K:kLevel}, phStat, OC),
+  };
+}
+
+// ---------- session-only history ----------
+const sessionHistory = [];
+
+function renderHistory(){
+  const body = document.getElementById('historyBody');
+  if(sessionHistory.length === 0){
+    body.innerHTML = `<div class="empty-state"><div class="glyph">📋</div>No soil tests generated yet in this session.</div>`;
+    return;
+  }
+  let rows = sessionHistory.map(h => `
+    <tr>
+      <td>${h.photo ? `<img class="hist-thumb" src="${h.photo}" alt="soil photo">` : `<span class="hist-thumb-empty"></span>`}</td>
+      <td class="mono">${h.time}</td>
+      <td>${h.crop}</td>
+      <td class="status-${h.levels.N}">${h.levels.N}</td>
+      <td class="status-${h.levels.P}">${h.levels.P}</td>
+      <td class="status-${h.levels.K}">${h.levels.K}</td>
+      <td><strong>${h.score}</strong></td>
+      <td class="mono">${h.dosage.urea} / ${h.dosage.dap} / ${h.dosage.mop}</td>
+    </tr>
+  `).join('');
+  body.innerHTML = `
+    <table>
+      <tr><th>Photo</th><th>Time</th><th>Crop</th><th>N</th><th>P</th><th>K</th><th>Score</th><th>Urea/DAP/MOP kg-acre</th></tr>
+      ${rows}
+    </table>
+  `;
+}
+
+document.getElementById('soilForm').addEventListener('submit', function(e){
+  e.preventDefault();
+
+  const formBannerError = document.getElementById('formBannerError');
+  const fieldsOk = validateAllFields();
+
+  if(!fieldsOk || photoError.classList.contains('show')){
+    formBannerError.classList.add('show');
+    const firstInvalid = document.querySelector('#soilForm input.invalid');
+    if(firstInvalid) firstInvalid.focus();
+    return;
+  }
+  formBannerError.classList.remove('show');
+
+  const crop = document.getElementById('crop').value;
+  const N = parseFloat(document.getElementById('N').value);
+  const P = parseFloat(document.getElementById('P').value);
+  const K = parseFloat(document.getElementById('K').value);
+  const pH = parseFloat(document.getElementById('pH').value);
+  const OC = parseFloat(document.getElementById('OC').value);
+
+  const r = recommend(crop, N, P, K, pH, OC);
+
+  document.getElementById('placeholder').style.display = 'none';
+  const resultsDiv = document.getElementById('results');
+  resultsDiv.style.display = 'block';
+
+  const scoreColor = r.score >= 75 ? 'var(--moss-dark)' : r.score >= 50 ? 'var(--wheat)' : 'var(--clay)';
+  let amendHtml = '';
+  if(r.lime) amendHtml += '<span class="amend-tag">🧪 Lime recommended (acidic soil)</span>';
+  if(r.gypsum) amendHtml += '<span class="amend-tag">🧪 Gypsum recommended (alkaline soil)</span>';
+
+  const photoHtml = currentPhotoDataUrl
+    ? `<img class="report-photo" src="${currentPhotoDataUrl}" alt="Uploaded field photo">`
+    : '';
+
+  resultsDiv.innerHTML = `
+    ${photoHtml}
+    <p style="font-size:0.92em; color:#6b5c48;"><strong>${crop}</strong> · pH ${pH.toFixed(2)} (${r.phStat})</p>
+    <div class="score-strip">
+      <div class="fill" style="width:${r.score}%; background:${scoreColor};">${r.score}</div>
+      <div class="rest" style="width:${100 - r.score}%;"></div>
+    </div>
+    <table>
+      <tr><th>Nutrient</th><th>Status</th></tr>
+      <tr><td>Nitrogen (N)</td><td class="status-${r.levels.N}">${r.levels.N}</td></tr>
+      <tr><td>Phosphorus (P)</td><td class="status-${r.levels.P}">${r.levels.P}</td></tr>
+      <tr><td>Potassium (K)</td><td class="status-${r.levels.K}">${r.levels.K}</td></tr>
+    </table>
+    ${amendHtml ? `<div>${amendHtml}</div>` : ''}
+    <h3 style="font-size:1.05em; margin-top:18px; color:var(--moss-dark);">Fertilizer Recommendation</h3>
+    <div class="dosage-grid">
+      <div class="dosage-card"><div class="label">Urea</div><div class="val">${r.dosage.urea} kg/acre</div></div>
+      <div class="dosage-card"><div class="label">DAP</div><div class="val">${r.dosage.dap} kg/acre</div></div>
+      <div class="dosage-card"><div class="label">MOP</div><div class="val">${r.dosage.mop} kg/acre</div></div>
+    </div>
+    <h3 style="font-size:1.05em; margin-top:18px; color:var(--moss-dark);">Advisory Notes</h3>
+    <ul class="notes">${r.notes.map(n => `<li>${n}</li>`).join('')}</ul>
+  `;
+
+  sessionHistory.unshift({
+    time: new Date().toLocaleTimeString(),
+    crop, levels: r.levels, score: r.score, dosage: r.dosage,
+    photo: currentPhotoDataUrl
+  });
+  renderHistory();
+});
+</script>
+
+</body>
+</html>
