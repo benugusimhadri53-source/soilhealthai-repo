@@ -1,454 +1,514 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" id="htmlRoot">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Soil Health AI — Standalone Demo</title>
+<title>Soil Health AI — Auto Photo → Values</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+Telugu:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Real on-device object recognition: TensorFlow.js + MobileNet (pretrained on ImageNet, ~1000 classes). Runs entirely in the browser. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tensorflow/4.20.0/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js"></script>
 <style>
   :root{
-    --loam:#2e2016;
-    --topsoil:#5c3d26;
-    --moss:#41613a;
-    --moss-dark:#324d2d;
-    --wheat:#b9861f;
-    --clay:#9c3c2b;
-    --chalk:#f3ede0;
-    --chalk-2:#eae1cf;
-    --stone:#d6cbb2;
-    --paper:#fbf8f2;
+    --loam:#2e2016; --topsoil:#5c3d26; --moss:#41613a; --moss-dark:#324d2d;
+    --wheat:#b9861f; --clay:#9c3c2b; --chalk:#f3ede0; --chalk-2:#eae1cf;
+    --stone:#d6cbb2; --paper:#fbf8f2;
   }
   *{box-sizing:border-box;}
   html{scroll-behavior:smooth;}
-  body{
-    margin:0;
-    font-family:'IBM Plex Sans',sans-serif;
-    background:var(--chalk);
-    color:var(--loam);
-  }
-  h1,h2,h3{font-family:'Fraunces',serif; margin:0;}
+  body{margin:0; font-family:'IBM Plex Sans','Noto Sans Telugu',sans-serif; background:var(--chalk); color:var(--loam);}
+  h1,h2,h3{font-family:'Fraunces','Noto Sans Telugu',serif; margin:0;}
   .mono{font-family:'IBM Plex Mono',monospace;}
+  html[lang="te"] h1, html[lang="te"] h2, html[lang="te"] h3{font-family:'Noto Sans Telugu',sans-serif;}
 
-  /* ---------- NAV ---------- */
-  nav{
-    position:sticky; top:0; z-index:50;
-    background:var(--loam);
-    display:flex; align-items:center; justify-content:space-between;
-    padding:14px 22px;
-    flex-wrap:wrap; gap:10px;
-  }
-  nav .brand{
-    color:var(--chalk); font-family:'Fraunces',serif; font-weight:700;
-    font-size:1.2em; letter-spacing:0.2px; cursor:pointer; border:none; background:none;
-  }
+  nav{position:sticky; top:0; z-index:50; background:var(--loam); display:flex; align-items:center; justify-content:space-between; padding:14px 22px; flex-wrap:wrap; gap:10px;}
+  nav .brand{color:var(--chalk); font-family:'Fraunces',serif; font-weight:700; font-size:1.2em; cursor:pointer; border:none; background:none;}
   nav .brand span{color:#8fae6c;}
-  nav .tabs{display:flex; gap:4px;}
-  nav .tabs button{
-    background:none; border:none; color:#cbbfa5; padding:8px 14px;
-    font-family:'IBM Plex Sans',sans-serif; font-size:0.92em; font-weight:500;
-    cursor:pointer; border-radius:6px; transition:background 0.15s, color 0.15s;
-  }
+  nav .tabs{display:flex; gap:4px; align-items:center; flex-wrap:wrap;}
+  nav .tabs button{background:none; border:none; color:#cbbfa5; padding:8px 14px; font-family:'IBM Plex Sans','Noto Sans Telugu',sans-serif; font-size:0.92em; font-weight:500; cursor:pointer; border-radius:6px;}
   nav .tabs button:hover{background:rgba(255,255,255,0.08); color:var(--chalk);}
   nav .tabs button.active{background:var(--moss); color:white;}
+  .lang-switch{display:flex; align-items:center; gap:2px; background:rgba(255,255,255,0.08); border-radius:8px; padding:3px; margin-left:6px;}
+  .lang-switch button{padding:6px 12px !important; font-size:0.82em !important; border-radius:6px !important; font-family:'IBM Plex Mono',monospace !important;}
+  .lang-switch button.lang-active{background:var(--wheat) !important; color:var(--loam) !important; font-weight:600;}
 
   main{max-width:1040px; margin:0 auto; padding:0 20px 60px;}
-  .view{display:none;}
-  .view.active{display:block;}
+  .view{display:none;} .view.active{display:block;}
 
-  /* ---------- HOME ---------- */
-  .hero{
-    padding:64px 0 40px; text-align:left;
-    display:grid; grid-template-columns:1.3fr 1fr; gap:36px; align-items:center;
-  }
-  @media(max-width:760px){ .hero{grid-template-columns:1fr; padding:36px 0 20px;} }
+  .hero{padding:64px 0 40px; display:grid; grid-template-columns:1.3fr 1fr; gap:36px; align-items:center;}
+  @media(max-width:760px){.hero{grid-template-columns:1fr; padding:36px 0 20px;}}
   .hero h1{font-size:2.5em; line-height:1.12; font-weight:600; color:var(--loam);}
   .hero h1 em{font-style:italic; color:var(--moss-dark);}
   .hero p{color:#5a4c3c; font-size:1.05em; line-height:1.6; max-width:46ch; margin-top:16px;}
   .cta-row{margin-top:26px; display:flex; gap:12px; flex-wrap:wrap;}
-  .btn{
-    display:inline-block; padding:13px 24px; border-radius:8px; border:none;
-    font-family:'IBM Plex Sans',sans-serif; font-weight:600; font-size:0.96em;
-    cursor:pointer; text-decoration:none; transition:transform 0.12s, box-shadow 0.12s;
-  }
-  .btn:active{transform:scale(0.98);}
+  .btn{display:inline-block; padding:13px 24px; border-radius:8px; border:none; font-family:'IBM Plex Sans','Noto Sans Telugu',sans-serif; font-weight:600; font-size:0.96em; cursor:pointer;}
   .btn-primary{background:var(--moss); color:white;}
   .btn-primary:hover{background:var(--moss-dark);}
   .btn-ghost{background:transparent; color:var(--loam); border:1.5px solid var(--stone);}
-  .btn-ghost:hover{border-color:var(--loam);}
 
-  /* signature element: soil horizon / core-sample strip */
-  .core-sample{
-    position:relative; border-radius:10px; overflow:hidden;
-    box-shadow:0 8px 24px rgba(46,32,22,0.18);
-    border:1px solid var(--stone);
-    display:flex; height:340px;
-  }
-  .core-sample .depth-rule{
-    width:34px; background:var(--paper); border-right:1px solid var(--stone);
-    display:flex; flex-direction:column; justify-content:space-between;
-    padding:8px 0; font-size:0.68em; color:#8a7a63; text-align:center;
-  }
+  .core-sample{position:relative; border-radius:10px; overflow:hidden; box-shadow:0 8px 24px rgba(46,32,22,0.18); border:1px solid var(--stone); display:flex; height:340px;}
+  .core-sample .depth-rule{width:34px; background:var(--paper); border-right:1px solid var(--stone); display:flex; flex-direction:column; justify-content:space-between; padding:8px 0; font-size:0.68em; color:#8a7a63; text-align:center;}
   .core-sample .strata{flex:1; display:flex; flex-direction:column;}
-  .horizon{
-    flex:1; display:flex; align-items:center; padding:0 16px;
-    color:white; font-size:0.85em; font-weight:500;
-    border-top:1px solid rgba(255,255,255,0.15);
-  }
-  .horizon .tag{
-    font-family:'IBM Plex Mono',monospace; font-weight:600; margin-right:10px;
-    opacity:0.85; font-size:0.9em;
-  }
-  .h-o{background:#4a3524; flex:0.7;}
-  .h-a{background:#6b4226; flex:1.1;}
-  .h-b{background:#8a5a34; flex:1.3;}
-  .h-c{background:#a9744a; flex:1;}
+  .horizon{flex:1; display:flex; align-items:center; padding:0 16px; color:white; font-size:0.85em; font-weight:500; border-top:1px solid rgba(255,255,255,0.15);}
+  .horizon .tag{font-family:'IBM Plex Mono',monospace; font-weight:600; margin-right:10px; opacity:0.85; font-size:0.9em;}
+  .h-o{background:#4a3524; flex:0.7;} .h-a{background:#6b4226; flex:1.1;} .h-b{background:#8a5a34; flex:1.3;} .h-c{background:#a9744a; flex:1;}
 
-  /* how it works, mapped onto horizon layers */
   .how{padding:30px 0 10px;}
   .how h2{font-size:1.6em; margin-bottom:6px;}
   .how > p{color:#6b5c48; margin-top:6px;}
   .steps{display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:26px;}
   @media(max-width:760px){.steps{grid-template-columns:1fr;}}
-  .step{
-    background:var(--paper); border:1px solid var(--stone); border-radius:10px;
-    padding:20px; border-left:5px solid var(--moss);
-  }
+  .step{background:var(--paper); border:1px solid var(--stone); border-radius:10px; padding:20px; border-left:5px solid var(--moss);}
   .step:nth-child(2){border-left-color:var(--wheat);}
   .step:nth-child(3){border-left-color:var(--clay);}
   .step .layer-tag{font-family:'IBM Plex Mono',monospace; font-size:0.78em; color:#8a7a63; letter-spacing:0.5px;}
   .step h3{font-size:1.08em; margin-top:6px; color:var(--loam);}
   .step p{font-size:0.9em; color:#6b5c48; margin-top:6px; line-height:1.5;}
 
-  /* ---------- DASHBOARD ---------- */
   .dash{display:grid; grid-template-columns:1fr; gap:24px; padding-top:34px;}
-  @media(min-width:860px){ .dash{grid-template-columns:0.9fr 1.1fr;} }
-  .panel{
-    background:var(--paper); border:1px solid var(--stone); border-radius:12px; padding:24px;
-  }
+  @media(min-width:860px){.dash{grid-template-columns:0.9fr 1.1fr;}}
+  .panel{background:var(--paper); border:1px solid var(--stone); border-radius:12px; padding:24px;}
   .panel h2{font-size:1.25em; margin-bottom:4px;}
   .panel .sub{font-size:0.85em; color:#8a7a63; margin-bottom:16px;}
   label{display:block; margin-top:14px; font-size:0.85em; font-weight:600; color:var(--loam);}
-  input,select{
-    width:100%; padding:10px 11px; margin-top:5px; border:1px solid var(--stone);
-    border-radius:7px; font-size:0.95em; font-family:'IBM Plex Mono',monospace;
-    background:white; color:var(--loam);
-  }
-  select{font-family:'IBM Plex Sans',sans-serif;}
+  input,select{width:100%; padding:10px 11px; margin-top:5px; border:1px solid var(--stone); border-radius:7px; font-size:0.95em; font-family:'IBM Plex Mono',monospace; background:white; color:var(--loam);}
+  select{font-family:'IBM Plex Sans','Noto Sans Telugu',sans-serif;}
   input:focus,select:focus{outline:2px solid var(--moss); outline-offset:1px; border-color:var(--moss);}
-
-  /* ---------- VALIDATION ---------- */
-  input.invalid,select.invalid{border-color:var(--clay); background:#fdf3f1;}
-  input.invalid:focus,select.invalid:focus{outline-color:var(--clay);}
-  .field-error{
-    display:none; color:var(--clay); font-size:0.78em; margin-top:5px;
-    font-family:'IBM Plex Sans',sans-serif; line-height:1.4;
-  }
+  input.invalid{border-color:var(--clay); background:#fdf3f1;}
+  .field-error{display:none; color:var(--clay); font-size:0.78em; margin-top:5px;}
   .field-error.show{display:block;}
-  .form-banner-error{
-    display:none; background:#fbeae6; border:1px solid #e0b3a8; color:#8a3222;
-    border-radius:8px; padding:10px 14px; font-size:0.85em; margin-top:16px; line-height:1.5;
-  }
+  .form-banner-error{display:none; background:#fbeae6; border:1px solid #e0b3a8; color:#8a3222; border-radius:8px; padding:10px 14px; font-size:0.85em; margin-top:16px;}
   .form-banner-error.show{display:block;}
 
-  /* ---------- PHOTO UPLOAD ---------- */
-  .photo-drop{
-    margin-top:5px; border:1.5px dashed var(--stone); border-radius:9px;
-    background:white; padding:16px; text-align:center; cursor:pointer;
-    transition:border-color 0.15s, background 0.15s;
-    position:relative;
-  }
+  .photo-drop{margin-top:5px; border:1.5px dashed var(--stone); border-radius:9px; background:white; padding:16px; text-align:center; cursor:pointer; position:relative;}
   .photo-drop:hover, .photo-drop.dragover{border-color:var(--moss); background:#f6f4ec;}
   .photo-drop.invalid-drop{border-color:var(--clay); background:#fdf3f1;}
-  .photo-drop input[type="file"]{
-    position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%;
-  }
+  .photo-drop input[type="file"]{position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%;}
   .photo-drop .drop-icon{font-size:1.5em; margin-bottom:4px;}
-  .photo-drop .drop-text{font-size:0.85em; color:#8a7a63; font-family:'IBM Plex Sans',sans-serif;}
+  .photo-drop .drop-text{font-size:0.85em; color:#8a7a63;}
   .photo-drop .drop-text strong{color:var(--moss-dark);}
-  .photo-preview-wrap{
-    display:none; margin-top:10px; position:relative;
-    border:1px solid var(--stone); border-radius:9px; overflow:hidden; background:white;
-  }
-  .photo-preview-wrap img{
-    display:block; width:100%; max-height:160px; object-fit:cover;
-  }
-  .photo-preview-wrap .photo-meta{
-    display:flex; align-items:center; justify-content:space-between;
-    padding:8px 12px; font-size:0.8em; color:#6b5c48; background:var(--chalk-2);
-  }
-  .photo-preview-wrap .photo-remove{
-    background:none; border:none; color:var(--clay); font-weight:600;
-    cursor:pointer; font-size:0.85em; font-family:'IBM Plex Sans',sans-serif;
-  }
+  .photo-preview-wrap{display:none; margin-top:10px; border:1px solid var(--stone); border-radius:9px; overflow:hidden; background:white;}
+  .photo-preview-wrap img{display:block; width:100%; max-height:160px; object-fit:cover;}
+  .photo-preview-wrap .photo-meta{display:flex; align-items:center; justify-content:space-between; padding:8px 12px; font-size:0.8em; color:#6b5c48; background:var(--chalk-2);}
+  .photo-preview-wrap .photo-remove{background:none; border:none; color:var(--clay); font-weight:600; cursor:pointer; font-size:0.85em;}
+  .photo-analyzing{display:none; margin-top:8px; font-size:0.8em; color:var(--moss-dark); font-family:'IBM Plex Mono',monospace;}
+  .photo-analyzing.show{display:block;}
+  .auto-fill-msg{display:none; margin-top:8px; font-size:0.82em; color:var(--moss-dark); background:#eef2e8; border:1px solid #c9d6bc; border-radius:7px; padding:8px 12px;}
+  .auto-fill-msg.show{display:block;}
 
-  .placeholder{
-    text-align:center; color:#a99c86; font-style:italic; padding:50px 10px; font-size:0.95em;
-  }
+  .placeholder{text-align:center; color:#a99c86; font-style:italic; padding:50px 10px; font-size:0.95em;}
   .score-strip{display:flex; align-items:stretch; height:64px; border-radius:8px; overflow:hidden; margin:14px 0 6px; border:1px solid var(--stone);}
   .score-strip .fill{display:flex; align-items:center; justify-content:center; color:white; font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:1.3em;}
   .score-strip .rest{background:var(--chalk-2);}
-
-  .status-Low{color:var(--clay); font-weight:600;}
-  .status-Medium{color:var(--wheat); font-weight:600;}
-  .status-High{color:var(--moss-dark); font-weight:600;}
-
+  .status-Low{color:var(--clay); font-weight:600;} .status-Medium{color:var(--wheat); font-weight:600;} .status-High{color:var(--moss-dark); font-weight:600;}
   table{width:100%; border-collapse:collapse; margin-top:8px;}
   td,th{padding:8px 4px; border-bottom:1px solid var(--stone); font-size:0.9em; text-align:left;}
   th{color:#8a7a63; font-weight:600; font-size:0.78em; text-transform:uppercase; letter-spacing:0.4px;}
-
-  .report-photo{
-    width:100%; max-height:190px; object-fit:cover; border-radius:9px;
-    border:1px solid var(--stone); margin-bottom:16px;
-  }
-
+  .report-photo{width:100%; max-height:190px; object-fit:cover; border-radius:9px; border:1px solid var(--stone); margin-bottom:16px;}
   .dosage-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:12px;}
   .dosage-card{background:var(--chalk-2); border-radius:8px; padding:12px; text-align:center;}
-  .dosage-card .label{font-size:0.78em; color:#6b5c48; text-transform:uppercase; letter-spacing:0.4px;}
+  .dosage-card .label{font-size:0.78em; color:#6b5c48; text-transform:uppercase;}
   .dosage-card .val{font-family:'IBM Plex Mono',monospace; font-size:1.15em; font-weight:600; color:var(--moss-dark); margin-top:4px;}
+  .amend-tag{display:inline-block; background:#f3e3c9; color:#7a5316; padding:4px 11px; border-radius:6px; font-size:0.82em; margin-right:6px; margin-top:8px; font-weight:500;}
+  ul.notes{padding-left:18px; margin-top:8px;} ul.notes li{margin-bottom:7px; font-size:0.9em; line-height:1.5; color:#463a2c;}
+  .info-banner{background:#eef2e8; border:1px solid #c9d6bc; color:#3f4f37; border-radius:8px; padding:12px 16px; font-size:0.86em; margin-bottom:20px; line-height:1.5;}
 
-  .amend-tag{
-    display:inline-block; background:#f3e3c9; color:#7a5316; padding:4px 11px;
-    border-radius:6px; font-size:0.82em; margin-right:6px; margin-top:8px; font-weight:500;
-  }
-  ul.notes{padding-left:18px; margin-top:8px;}
-  ul.notes li{margin-bottom:7px; font-size:0.9em; line-height:1.5; color:#463a2c;}
+  .visual-card{background:var(--chalk-2); border-radius:9px; padding:14px 16px; margin-bottom:16px; border:1px solid var(--stone);}
+  .visual-card .vc-head{display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;}
+  .visual-card .vc-head h3{font-size:0.95em; color:var(--moss-dark);}
+  .color-swatch{width:26px; height:26px; border-radius:6px; display:inline-block; border:1px solid var(--stone); flex-shrink:0;}
+  .visual-card .vc-row{display:flex; align-items:center; gap:10px; font-size:0.88em; color:#463a2c;}
+  .visual-card .vc-detail{font-size:0.8em; color:#6b5c48; margin-top:6px; line-height:1.5;}
+  .badge-detected{font-family:'IBM Plex Mono',monospace; font-size:0.7em; background:var(--moss); color:white; padding:2px 8px; border-radius:10px;}
+  .ai-pred-grid{display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-top:12px;}
+  @media(max-width:600px){.ai-pred-grid{grid-template-columns:repeat(3,1fr);}}
+  .ai-pred-item{background:white; border-radius:7px; padding:8px 6px; text-align:center; border:1px solid var(--stone);}
+  .ai-pred-item .p-label{font-size:0.7em; color:#8a7a63; text-transform:uppercase;}
+  .ai-pred-item .p-val{font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:1.05em; color:var(--moss-dark); margin-top:2px;}
 
-  .info-banner{
-    background:#eef2e8; border:1px solid #c9d6bc; color:#3f4f37;
-    border-radius:8px; padding:12px 16px; font-size:0.86em; margin-bottom:20px; line-height:1.5;
-  }
-
-  /* ---------- HISTORY ---------- */
   .hist-wrap{padding-top:34px;}
-  .empty-state{
-    text-align:center; padding:60px 20px; color:#8a7a63;
-  }
+  .empty-state{text-align:center; padding:60px 20px; color:#8a7a63;}
   .empty-state .glyph{font-size:2.4em; margin-bottom:10px;}
-  .hist-thumb{
-    width:38px; height:38px; border-radius:6px; object-fit:cover; border:1px solid var(--stone);
-    vertical-align:middle;
-  }
-  .hist-thumb-empty{
-    width:38px; height:38px; border-radius:6px; background:var(--chalk-2);
-    display:inline-block; vertical-align:middle;
-  }
-
+  .hist-thumb{width:38px; height:38px; border-radius:6px; object-fit:cover; border:1px solid var(--stone); vertical-align:middle;}
+  .hist-thumb-empty{width:38px; height:38px; border-radius:6px; background:var(--chalk-2); display:inline-block; vertical-align:middle;}
   footer{text-align:center; padding:22px; color:#a99c86; font-size:0.82em;}
 </style>
 </head>
 <body>
-
 <nav>
   <button class="brand" onclick="showView('home')">Soil<span>Health</span> AI</button>
   <div class="tabs">
-    <button data-tab="home" class="active" onclick="showView('home')">Home</button>
-    <button data-tab="dashboard" onclick="showView('dashboard')">Dashboard</button>
-    <button data-tab="history" onclick="showView('history')">History</button>
+    <button data-tab="home" class="active" onclick="showView('home')" data-i18n="navHome">Home</button>
+    <button data-tab="dashboard" onclick="showView('dashboard')" data-i18n="navDashboard">Dashboard</button>
+    <button data-tab="disease" onclick="showView('disease')" data-i18n="navDisease">Disease Scan</button>
+    <button data-tab="history" onclick="showView('history')" data-i18n="navHistory">History</button>
+    <div class="lang-switch">
+      <button id="langBtnEn" onclick="setLanguage('en')">EN</button>
+      <button id="langBtnTe" onclick="setLanguage('te')">తెలుగు</button>
+    </div>
   </div>
 </nav>
 
 <main>
-
-  <!-- ============ HOME ============ -->
   <section id="view-home" class="view active">
     <div class="hero">
       <div>
-        <h1>Read your soil<br><em>like a core sample.</em></h1>
-        <p>Enter a soil test and get an instant AI-generated health card — nutrient status, pH advisory, and precise Urea / DAP / MOP dosage for your crop, laid out the way an agronomist reads a soil profile.</p>
+        <h1><span data-i18n="heroTitle1">Read your soil</span><br><em data-i18n="heroTitleEm">like a core sample.</em></h1>
+        <p data-i18n="heroDesc">Upload a soil or crop photo — the on-device AI automatically predicts N, P, K, pH and OC and fills the form. Then generate the full soil health card with fertilizer dosages. Everything stays in your browser.</p>
         <div class="cta-row">
-          <button class="btn btn-primary" onclick="showView('dashboard')">Open Dashboard →</button>
-          <button class="btn btn-ghost" onclick="document.getElementById('how').scrollIntoView()">How it works</button>
+          <button class="btn btn-primary" onclick="showView('dashboard')" data-i18n="ctaOpenDashboard">Open Dashboard →</button>
+          <button class="btn btn-ghost" onclick="document.getElementById('how').scrollIntoView()" data-i18n="ctaHowItWorks">How it works</button>
         </div>
       </div>
       <div class="core-sample" aria-hidden="true">
-        <div class="depth-rule">
-          <span>0cm</span><span>15</span><span>30</span><span>45cm+</span>
-        </div>
+        <div class="depth-rule"><span>0cm</span><span>15</span><span>30</span><span>45cm+</span></div>
         <div class="strata">
-          <div class="horizon h-o"><span class="tag">O</span> Organic layer</div>
-          <div class="horizon h-a"><span class="tag">A</span> Topsoil — N·P·K</div>
-          <div class="horizon h-b"><span class="tag">B</span> Subsoil — pH·EC</div>
-          <div class="horizon h-c"><span class="tag">C</span> Parent material</div>
+          <div class="horizon h-o"><span class="tag">O</span> <span data-i18n="horizonO">Organic layer</span></div>
+          <div class="horizon h-a"><span class="tag">A</span> <span data-i18n="horizonA">Topsoil — N·P·K</span></div>
+          <div class="horizon h-b"><span class="tag">B</span> <span data-i18n="horizonB">Subsoil — pH·EC</span></div>
+          <div class="horizon h-c"><span class="tag">C</span> <span data-i18n="horizonC">Parent material</span></div>
         </div>
       </div>
     </div>
-
     <div class="how" id="how">
-      <h2>Three layers to a recommendation</h2>
-      <p>Same structure as reading an actual soil core, top to bottom.</p>
+      <h2 data-i18n="howHeading">Three steps</h2>
+      <p data-i18n="howSub">Photo → Auto AI values → Health Card</p>
       <div class="steps">
         <div class="step">
-          <div class="layer-tag">HORIZON O — INPUT</div>
-          <h3>Enter your soil test</h3>
-          <p>N, P, K, pH, organic carbon, your crop — and optionally a field photo. Takes under a minute.</p>
+          <div class="layer-tag" data-i18n="stepOTag">1 — PHOTO</div>
+          <h3 data-i18n="stepOTitle">Upload soil / crop photo</h3>
+          <p data-i18n="stepODesc">Clear close-up of soil or crop. Only real soil/crop photos accepted.</p>
         </div>
         <div class="step">
-          <div class="layer-tag">HORIZON A — ANALYSIS</div>
-          <h3>Rules trained into the model</h3>
-          <p>The same agronomic thresholds (ICAR-style) used to train the backend ML model classify each nutrient and calculate dosage.</p>
+          <div class="layer-tag" data-i18n="stepATag">2 — AUTO AI</div>
+          <h3 data-i18n="stepATitle">Values filled automatically</h3>
+          <p data-i18n="stepADesc">On-device model predicts N, P, K, pH, OC and writes them into the form instantly.</p>
         </div>
         <div class="step">
-          <div class="layer-tag">HORIZON B — OUTPUT</div>
-          <h3>Get your health card</h3>
-          <p>A soil health score, nutrient status, and exact fertilizer kg/acre — plus plain-language advisory notes.</p>
+          <div class="layer-tag" data-i18n="stepBTag">3 — CARD</div>
+          <h3 data-i18n="stepBTitle">Generate health card</h3>
+          <p data-i18n="stepBDesc">Score, nutrient status, exact Urea / DAP / MOP kg/acre and advisory notes.</p>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- ============ DASHBOARD ============ -->
   <section id="view-dashboard" class="view">
-    <div class="info-banner">
-      🌾 This is a standalone, browser-only demo — it runs the same agronomic rule engine that generated the training data for the full AI backend. No sign-in, no data leaves your browser, and nothing is saved after you close the tab (see History tab for this session only).
+    <div class="info-banner" data-i18n="infoBanner">
+      🌾 Upload a soil/crop photo → AI automatically fills N·P·K·pH·OC → Generate full soil health card. 100% browser-side, no data leaves your device.
     </div>
     <div class="dash">
       <div class="panel">
-        <h2>Soil Test Input</h2>
-        <div class="sub">Values in kg/ha unless noted</div>
+        <h2 data-i18n="inputPanelTitle">Soil Test Input</h2>
+        <div class="sub" data-i18n="inputPanelSub">Values auto-filled from photo AI, or type your own lab values.</div>
         <form id="soilForm">
-          <label>Crop</label>
+          <label data-i18n="labelCrop">Crop</label>
           <select id="crop">
-            <option>Rice</option><option>Wheat</option><option>Maize</option>
-            <option>Cotton</option><option>Sugarcane</option><option>Groundnut</option>
-            <option>Pulses</option><option>Vegetables</option>
+            <option value="Rice">Rice</option><option value="Wheat">Wheat</option><option value="Maize">Maize</option>
+            <option value="Cotton">Cotton</option><option value="Sugarcane">Sugarcane</option><option value="Groundnut">Groundnut</option>
+            <option value="Pulses">Pulses</option><option value="Vegetables">Vegetables</option>
           </select>
 
-          <label>Nitrogen — N (kg/ha)</label>
+          <label data-i18n="labelN">Nitrogen — N (kg/ha)</label>
           <input type="number" id="N" step="0.1" value="220" min="0" max="1000" required>
           <div class="field-error" id="err-N"></div>
 
-          <label>Phosphorus — P (kg/ha)</label>
+          <label data-i18n="labelP">Phosphorus — P (kg/ha)</label>
           <input type="number" id="P" step="0.1" value="14" min="0" max="300" required>
           <div class="field-error" id="err-P"></div>
 
-          <label>Potassium — K (kg/ha)</label>
+          <label data-i18n="labelK">Potassium — K (kg/ha)</label>
           <input type="number" id="K" step="0.1" value="160" min="0" max="1000" required>
           <div class="field-error" id="err-K"></div>
 
-          <label>Soil pH</label>
+          <label data-i18n="labelpH">Soil pH</label>
           <input type="number" id="pH" step="0.01" value="6.2" min="0" max="14" required>
           <div class="field-error" id="err-pH"></div>
 
-          <label>Organic Carbon — OC (%)</label>
+          <label data-i18n="labelOC">Organic Carbon — OC (%)</label>
           <input type="number" id="OC" step="0.01" value="0.45" min="0" max="20" required>
           <div class="field-error" id="err-OC"></div>
 
-          <label>Soil / Field Photo (optional)</label>
+          <label data-i18n="labelPhoto">Soil / Crop Photo — AI Auto-Fill</label>
           <div class="photo-drop" id="photoDrop">
             <div class="drop-icon">📷</div>
-            <div class="drop-text"><strong>Tap to upload</strong> or drag a photo here</div>
+            <div class="drop-text"><strong data-i18n="dropStrong">Tap to upload</strong> <span data-i18n="dropRest">or drag a photo here</span><br><span data-i18n="dropOnly">Only soil or crop photos accepted</span></div>
             <input type="file" id="photoInput" accept="image/*">
           </div>
+          <div class="photo-analyzing" id="photoAnalyzing" data-i18n="photoAnalyzingText">🔎 Running on-device AI… predicting values…</div>
+          <div class="auto-fill-msg" id="autoFillMsg" data-i18n="autoFillMsg">✅ AI predicted values have been filled into the form automatically.</div>
           <div class="photo-preview-wrap" id="photoPreviewWrap">
-            <img id="photoPreviewImg" alt="Uploaded soil photo preview">
+            <img id="photoPreviewImg" alt="Uploaded soil photo">
             <div class="photo-meta">
               <span id="photoFileName" class="mono"></span>
-              <button type="button" class="photo-remove" id="photoRemoveBtn">Remove</button>
+              <button type="button" class="photo-remove" id="photoRemoveBtn" data-i18n="photoRemove">Remove</button>
             </div>
           </div>
           <div class="field-error" id="err-photo"></div>
 
-          <div class="form-banner-error" id="formBannerError">Please fix the highlighted fields before generating the report.</div>
+          <div class="form-banner-error" id="formBannerError" data-i18n="formBannerErrorText">Please fix the highlighted fields before generating the report.</div>
 
-          <button type="submit" class="btn btn-primary" style="width:100%; margin-top:20px;">Generate Soil Health Card</button>
+          <button type="submit" class="btn btn-primary" style="width:100%; margin-top:20px;" data-i18n="generateBtn">Generate Soil Health Card</button>
         </form>
       </div>
 
       <div class="panel">
-        <h2>Soil Health Report</h2>
-        <div id="placeholder" class="placeholder">Fill in the soil values and generate your card — the result appears here.</div>
+        <h2 data-i18n="reportPanelTitle">Soil Health Report</h2>
+        <div id="placeholder" class="placeholder" data-i18n="reportPlaceholder">Upload a photo (AI fills the values) or enter numbers, then generate the card.</div>
         <div id="results" style="display:none;"></div>
       </div>
     </div>
   </section>
 
-  <!-- ============ HISTORY ============ -->
-  <section id="view-history" class="view">
-    <div class="hist-wrap">
+  <section id="view-disease" class="view">
+    <div class="info-banner" data-i18n="diseaseInfoBanner">
+      🍃 Upload a close-up leaf/plant photo of any supported crop → on-device AI confirms foliage, auto-suggests the crop when possible, then screens for that crop's common diseases. 100% browser-side.
+    </div>
+    <div class="dash">
       <div class="panel">
-        <h2>Session History</h2>
-        <div class="sub">Only stored in this browser tab for this session — refreshing clears it.</div>
-        <div id="historyBody">
-          <div class="empty-state">
-            <div class="glyph">📋</div>
-            No soil tests generated yet in this session.
+        <h2 data-i18n="diseasePanelTitle">Crop Disease Scan</h2>
+        <div class="sub" data-i18n="diseasePanelSub">Photos of any supported crop are accepted. Select (or let AI suggest) the crop so the right disease list is used.</div>
+        <form id="diseaseForm">
+          <label data-i18n="labelDiseaseCrop">Crop</label>
+          <select id="diseaseCrop">
+            <option value="Rice">Rice</option><option value="Wheat">Wheat</option><option value="Maize">Maize</option>
+            <option value="Cotton">Cotton</option><option value="Sugarcane">Sugarcane</option><option value="Groundnut">Groundnut</option>
+            <option value="Pulses">Pulses</option><option value="Vegetables">Vegetables</option>
+          </select>
+
+          <label data-i18n="labelDiseasePhoto">Leaf / Plant Photo</label>
+          <div class="photo-drop" id="diseasePhotoDrop">
+            <div class="drop-icon">🍃</div>
+            <div class="drop-text"><strong data-i18n="diseaseDropStrong">Tap to upload</strong> <span data-i18n="dropRest">or drag a photo here</span><br><span data-i18n="diseaseDropOnly">Close-up of a leaf or affected plant part</span></div>
+            <input type="file" id="diseasePhotoInput" accept="image/*">
           </div>
-        </div>
+          <div class="photo-analyzing" id="diseasePhotoAnalyzing" data-i18n="diseaseAnalyzingText">🔎 Running per-crop model… screening for disease…</div>
+          <div class="photo-preview-wrap" id="diseasePhotoPreviewWrap">
+            <img id="diseasePhotoPreviewImg" alt="Uploaded leaf photo">
+            <div class="photo-meta">
+              <span id="diseasePhotoFileName" class="mono"></span>
+              <button type="button" class="photo-remove" id="diseasePhotoRemoveBtn" data-i18n="photoRemove">Remove</button>
+            </div>
+          </div>
+          <div class="field-error" id="err-diseasePhoto"></div>
+
+          <button type="submit" class="btn btn-primary" style="width:100%; margin-top:20px;" id="diseaseSubmitBtn" data-i18n="diseaseScanBtn" disabled>Scan for Disease</button>
+        </form>
+      </div>
+
+      <div class="panel">
+        <h2 data-i18n="diseaseReportTitle">Disease Report</h2>
+        <div id="diseasePlaceholder" class="placeholder" data-i18n="diseaseReportPlaceholder">Select a crop and upload a leaf photo to screen it.</div>
+        <div id="diseaseResults" style="display:none;"></div>
       </div>
     </div>
   </section>
 
+  <section id="view-history" class="view">
+    <div class="hist-wrap">
+      <div class="panel">
+        <h2 data-i18n="historyTitle">Session History</h2>
+        <div class="sub" data-i18n="historySub">Stored only in this browser tab for this session.</div>
+        <div id="historyBody">
+          <div class="empty-state"><div class="glyph">📋</div><span data-i18n="historyEmpty">No soil tests generated yet.</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
 </main>
 
-<footer>AI-Driven Soil Health Card & Fertilizer Recommendation — standalone browser demo</footer>
+<footer data-i18n="footerText">AI Soil Health Card — Photo → Auto ML values → Fertilizer recommendation (standalone browser demo)</footer>
 
 <script>
-// ---------- view switching ----------
+let currentLang = 'en';
+const I18N = {
+  navHome:{en:"Home",te:"హోమ్"}, navDashboard:{en:"Dashboard",te:"డాష్‌బోర్డ్"}, navHistory:{en:"History",te:"చరిత్ర"},
+  heroTitle1:{en:"Read your soil",te:"మీ మట్టిని చదవండి"}, heroTitleEm:{en:"like a core sample.",te:"కోర్ నమూనాలా."},
+  heroDesc:{en:"Upload a soil or crop photo — the on-device AI automatically predicts N, P, K, pH and OC and fills the form. Then generate the full soil health card with fertilizer dosages. Everything stays in your browser.",
+            te:"మట్టి లేదా పంట ఫోటో అప్‌లోడ్ చేయండి — పరికరంలోని AI స్వయంచాలకంగా N, P, K, pH, OC ని అంచనా వేసి ఫారమ్‌ను నింపుతుంది. తర్వాత పూర్తి మట్టి ఆరోగ్య కార్డు పొందండి."},
+  ctaOpenDashboard:{en:"Open Dashboard →",te:"డాష్‌బోర్డ్ తెరవండి →"}, ctaHowItWorks:{en:"How it works",te:"ఇది ఎలా పనిచేస్తుంది"},
+  horizonO:{en:"Organic layer",te:"సేంద్రియ పొర"}, horizonA:{en:"Topsoil — N·P·K",te:"పైమట్టి — N·P·K"},
+  horizonB:{en:"Subsoil — pH·EC",te:"అడుగుమట్టి — pH·EC"}, horizonC:{en:"Parent material",te:"మూల పదార్థం"},
+  howHeading:{en:"Three steps",te:"మూడు దశలు"}, howSub:{en:"Photo → Auto AI values → Health Card",te:"ఫోటో → స్వయం AI విలువలు → ఆరోగ్య కార్డు"},
+  stepOTag:{en:"1 — PHOTO",te:"1 — ఫోటో"}, stepOTitle:{en:"Upload soil / crop photo",te:"మట్టి / పంట ఫోటో అప్‌లోడ్"},
+  stepODesc:{en:"Clear close-up of soil or crop. Only real soil/crop photos accepted.",te:"మట్టి లేదా పంట యొక్క స్పష్టమైన క్లోజప్. నిజమైన ఫోటోలు మాత్రమే."},
+  stepATag:{en:"2 — AUTO AI",te:"2 — స్వయం AI"}, stepATitle:{en:"Values filled automatically",te:"విలువలు స్వయంచాలకంగా నింపబడతాయి"},
+  stepADesc:{en:"On-device model predicts N, P, K, pH, OC and writes them into the form instantly.",te:"పరికరంలోని మోడల్ N, P, K, pH, OC ని అంచనా వేసి ఫారమ్‌లో నింపుతుంది."},
+  stepBTag:{en:"3 — CARD",te:"3 — కార్డు"}, stepBTitle:{en:"Generate health card",te:"ఆరోగ్య కార్డు రూపొందించండి"},
+  stepBDesc:{en:"Score, nutrient status, exact Urea / DAP / MOP kg/acre and advisory notes.",te:"స్కోరు, పోషక స్థితి, ఖచ్చితమైన యూరియా/DAP/MOP kg/ఎకరం మరియు సలహాలు."},
+  infoBanner:{en:"🌾 Upload a soil/crop photo → AI automatically fills N·P·K·pH·OC → Generate full soil health card. 100% browser-side, no data leaves your device.",
+              te:"🌾 మట్టి/పంట ఫోటో అప్‌లోడ్ → AI స్వయంచాలకంగా N·P·K·pH·OC నింపుతుంది → పూర్తి ఆరోగ్య కార్డు. 100% బ్రౌజర్‌లోనే."},
+  inputPanelTitle:{en:"Soil Test Input",te:"మట్టి పరీక్ష ఇన్‌పుట్"},
+  inputPanelSub:{en:"Values auto-filled from photo AI, or type your own lab values.",te:"ఫోటో AI నుండి స్వయంచాలకంగా నింపబడతాయి, లేదా మీ ల్యాబ్ విలువలు టైప్ చేయండి."},
+  labelCrop:{en:"Crop",te:"పంట"}, labelN:{en:"Nitrogen — N (kg/ha)",te:"నత్రజని — N (kg/ha)"},
+  labelP:{en:"Phosphorus — P (kg/ha)",te:"భాస్వరం — P (kg/ha)"}, labelK:{en:"Potassium — K (kg/ha)",te:"పొటాషియం — K (kg/ha)"},
+  labelpH:{en:"Soil pH",te:"మట్టి pH"}, labelOC:{en:"Organic Carbon — OC (%)",te:"సేంద్రియ కర్బనం — OC (%)"},
+  labelPhoto:{en:"Soil / Crop Photo — AI Auto-Fill",te:"మట్టి / పంట ఫోటో — AI స్వయం-నింపు"},
+  dropStrong:{en:"Tap to upload",te:"అప్‌లోడ్ చేయడానికి నొక్కండి"}, dropRest:{en:"or drag a photo here",te:"లేదా ఫోటోను ఇక్కడ లాగండి"},
+  dropOnly:{en:"Only soil or crop photos accepted",te:"మట్టి లేదా పంట ఫోటోలు మాత్రమే"},
+  photoAnalyzingText:{en:"🔎 Running on-device AI… predicting values…",te:"🔎 పరికరంలోని AI నడుపుతోంది… విలువలు అంచనా వేస్తోంది…"},
+  autoFillMsg:{en:"✅ AI predicted values have been filled into the form automatically.",te:"✅ AI అంచనా విలువలు స్వయంచాలకంగా ఫారమ్‌లో నింపబడ్డాయి."},
+  photoRemove:{en:"Remove",te:"తీసివేయండి"},
+  formBannerErrorText:{en:"Please fix the highlighted fields before generating the report.",te:"నివేదిక ముందు హైలైట్ చేసిన ఫీల్డ్‌లను సరిచేయండి."},
+  generateBtn:{en:"Generate Soil Health Card",te:"మట్టి ఆరోగ్య కార్డు రూపొందించండి"},
+  reportPanelTitle:{en:"Soil Health Report",te:"మట్టి ఆరోగ్య నివేదిక"},
+  reportPlaceholder:{en:"Upload a photo (AI fills the values) or enter numbers, then generate the card.",te:"ఫోటో అప్‌లోడ్ చేయండి (AI విలువలు నింపుతుంది) లేదా సంఖ్యలు నమోదు చేసి కార్డు రూపొందించండి."},
+  historyTitle:{en:"Session History",te:"సెషన్ చరిత్ర"}, historySub:{en:"Stored only in this browser tab for this session.",te:"ఈ సెషన్ కోసం ఈ ట్యాబ్‌లో మాత్రమే."},
+  historyEmpty:{en:"No soil tests generated yet.",te:"ఇంకా మట్టి పరీక్షలు లేవు."},
+  footerText:{en:"AI Soil Health Card — Photo → Auto ML values → Fertilizer recommendation (standalone browser demo)",
+              te:"AI మట్టి ఆరోగ్య కార్డు — ఫోటో → స్వయం ML విలువలు → ఎరువుల సిఫారసు"},
+
+  fieldRequired:{en:"{field} is required.",te:"{field} తప్పనిసరి."}, fieldMustBeNumber:{en:"{field} must be a number.",te:"{field} సంఖ్య అయి ఉండాలి."},
+  fieldRange:{en:"{field} should be between {min} and {max}.",te:"{field} {min} మరియు {max} మధ్య ఉండాలి."},
+  photoTypeError:{en:"Please upload an image file (JPG, PNG, WEBP, or HEIC).",te:"చిత్ర ఫైల్ అప్‌లోడ్ చేయండి."},
+  photoSizeError:{en:"Image is {size}MB — please upload under 5MB.",te:"చిత్రం {size}MB — 5MB కంటే తక్కువ అప్‌లోడ్ చేయండి."},
+  photoReadError:{en:"Could not read that file.",te:"ఫైల్ చదవలేకపోయాము."},
+  fN:{en:"Nitrogen",te:"నత్రజని"}, fP:{en:"Phosphorus",te:"భాస్వరం"}, fK:{en:"Potassium",te:"పొటాషియం"},
+  fpH:{en:"Soil pH",te:"మట్టి pH"}, fOC:{en:"Organic carbon",te:"సేంద్రియ కర్బనం"},
+  statusLow:{en:"Low",te:"తక్కువ"}, statusMedium:{en:"Medium",te:"మధ్యస్థం"}, statusHigh:{en:"High",te:"అధికం"},
+  phAcidic:{en:"Acidic",te:"ఆమ్ల"}, phNeutral:{en:"Neutral",te:"తటస్థ"}, phAlkaline:{en:"Alkaline",te:"క్షార"},
+  cropRice:{en:"Rice",te:"వరి"}, cropWheat:{en:"Wheat",te:"గోధుమ"}, cropMaize:{en:"Maize",te:"మొక్కజొన్న"},
+  cropCotton:{en:"Cotton",te:"పత్తి"}, cropSugarcane:{en:"Sugarcane",te:"చెరకు"}, cropGroundnut:{en:"Groundnut",te:"వేరుశనగ"},
+  cropPulses:{en:"Pulses",te:"పప్పుధాన్యాలు"}, cropVegetables:{en:"Vegetables",te:"కూరగాయలు"},
+  rejFlat:{en:"That looks like a flat or graphic image, not soil/crop.",te:"ఫ్లాట్ లేదా గ్రాఫిక్ చిత్రం, మట్టి/పంట కాదు."},
+  rejDocument:{en:"Looks like a document or mostly-white image.",te:"పత్రం లేదా తెల్లని చిత్రంలా ఉంది."},
+  rejNotSoilCrop:{en:"Doesn't look like soil or crop photo. Upload a close-up of soil or field.",te:"మట్టి లేదా పంట ఫోటోలా లేదు. క్లోజప్ అప్‌లోడ్ చేయండి."},
+  rejUnreadable:{en:"Could not read that image.",te:"చిత్రం చదవలేకపోయాము."},
+  visualCardTitle:{en:"AI Vision + Auto Predictions",te:"AI విజన్ + స్వయం అంచనాలు"},
+  visualBadge:{en:"✅ soil/crop detected",te:"✅ మట్టి/పంట గుర్తించబడింది"},
+  visualBrightness:{en:"avg brightness",te:"సగటు ప్రకాశం"},
+  visualDisclaimer:{en:"Demo on-device model (color + brightness + greenness). Not a lab test. Use as guidance.",te:"డెమో పరికరం మోడల్. ల్యాబ్ పరీక్ష కాదు. మార్గదర్శకంగా ఉపయోగించండి."},
+  colorGreenLabel:{en:"Green / crop cover",te:"ఆకుపచ్చ / పంట కవర్"},
+  colorGreenHint:{en:"Mostly vegetation cover.",te:"ఎక్కువగా మొక్కల కవర్."},
+  colorDarkLabel:{en:"Dark brown / black soil",te:"ముదురు గోధుమ / నల్ల మట్టి"},
+  colorDarkHint:{en:"Higher organic matter or moist surface.",te:"ఎక్కువ సేంద్రియ పదార్థం లేదా తడి."},
+  colorMediumLabel:{en:"Medium brown soil",te:"మధ్యస్థ గోధుమ మట్టి"},
+  colorMediumHint:{en:"Moderate organic matter.",te:"మధ్యస్థ సేంద్రియ పదార్థం."},
+  colorLightLabel:{en:"Light / pale soil",te:"తేలికపాటి / లేత మట్టి"},
+  colorLightHint:{en:"Lower organic matter or dry surface.",te:"తక్కువ సేంద్రియ పదార్థం లేదా పొడి."},
+  aiPredTitle:{en:"AI Predicted Values (auto-filled)",te:"AI అంచనా విలువలు (స్వయం-నింపబడ్డాయి)"},
+  amendLime:{en:"🧪 Lime recommended (acidic soil)",te:"🧪 సున్నం సిఫారసు (ఆమ్ల మట్టి)"},
+  amendGypsum:{en:"🧪 Gypsum recommended (alkaline soil)",te:"🧪 జిప్సం సిఫారసు (క్షార మట్టి)"},
+  tblNutrient:{en:"Nutrient",te:"పోషకం"}, tblStatus:{en:"Status",te:"స్థితి"},
+  nutN:{en:"Nitrogen (N)",te:"నత్రజని (N)"}, nutP:{en:"Phosphorus (P)",te:"భాస్వరం (P)"}, nutK:{en:"Potassium (K)",te:"పొటాషియం (K)"},
+  fertRecTitle:{en:"Fertilizer Recommendation",te:"ఎరువుల సిఫారసు"}, advisoryTitle:{en:"Advisory Notes",te:"సలహా నోట్లు"},
+  perAcre:{en:"kg/acre",te:"kg/ఎకరం"},
+  noteNLow:{en:"Nitrogen is low — split urea into 2-3 doses.",te:"నత్రజని తక్కువ — యూరియాను 2-3 దఫాలుగా వేయండి."},
+  notePLow:{en:"Phosphorus is low — apply DAP near root zone at sowing.",te:"భాస్వరం తక్కువ — విత్తేటప్పుడు వేరు దగ్గర DAP వేయండి."},
+  noteKLow:{en:"Potassium is low — apply MOP in split doses before flowering.",te:"పొటాషియం తక్కువ — పూత ముందు MOP దఫాలుగా వేయండి."},
+  noteAcidic:{en:"Soil is acidic — apply agricultural lime before sowing.",te:"మట్టి ఆమ్లం — విత్తడానికి ముందు సున్నం వేయండి."},
+  noteAlkaline:{en:"Soil is alkaline — apply gypsum and use acid-forming fertilizers.",te:"మట్టి క్షారం — జిప్సం వేయండి, ఆమ్ల ఎరువులు వాడండి."},
+  noteLowOC:{en:"Organic carbon is low — add FYM or compost 5-10 t/acre.",te:"సేంద్రియ కర్బనం తక్కువ — 5-10 టన్నులు/ఎకరం ఎరువు వేయండి."},
+  noteGood:{en:"Soil is in good condition. Maintain balanced fertilization.",te:"మట్టి మంచి స్థితిలో ఉంది. సమతుల్య ఎరువులు కొనసాగించండి."},
+  noteVisualScan:{en:"Visual scan: photo reads as {label}. {hint}",te:"దృశ్య స్కాన్: ఫోటో {label}. {hint}"},
+  noteAiUsed:{en:"Values driven by on-device AI photo prediction.",te:"విలువలు పరికరంలోని AI ఫోటో అంచనా నుండి."},
+  histPhoto:{en:"Photo",te:"ఫోటో"}, histTime:{en:"Time",te:"సమయం"}, histCrop:{en:"Crop",te:"పంట"},
+  histScore:{en:"Score",te:"స్కోరు"}, histDosage:{en:"Urea/DAP/MOP kg-acre",te:"యూరియా/DAP/MOP kg-ఎకరం"}, histVisual:{en:"Visual",te:"దృశ్యం"},
+
+  navDisease:{en:"Disease Scan",te:"వ్యాధి స్కాన్"},
+  diseaseInfoBanner:{en:"🍃 Upload a close-up leaf/plant photo of any supported crop → on-device AI confirms foliage, auto-suggests the crop when possible, then screens for that crop's common diseases. 100% browser-side.",
+                      te:"🍃 ఏదైనా మద్దతు ఉన్న పంట ఆకు ఫోటో అప్‌లోడ్ చేయండి → AI ఆకు అని నిర్ధారించి పంటను సూచిస్తుంది, తర్వాత ఆ పంట వ్యాధుల కోసం స్క్రీన్ చేస్తుంది. 100% బ్రౌజర్‌లోనే."},
+  diseasePanelTitle:{en:"Crop Disease Scan",te:"పంట వ్యాధి స్కాన్"},
+  diseasePanelSub:{en:"Photos of any supported crop are accepted. Select (or let AI suggest) the crop so the right disease list is used.",te:"ఏదైనా మద్దతు ఉన్న పంట ఫోటోలు అంగీకరించబడతాయి. సరైన వ్యాధి జాబితా కోసం పంటను ఎంచుకోండి (లేదా AI సూచించనివ్వండి)."},
+  labelDiseaseCrop:{en:"Crop",te:"పంట"},
+  labelDiseasePhoto:{en:"Leaf / Plant Photo",te:"ఆకు / మొక్క ఫోటో"},
+  diseaseDropStrong:{en:"Tap to upload",te:"అప్‌లోడ్ చేయడానికి నొక్కండి"},
+  diseaseDropOnly:{en:"Close-up of a leaf or affected plant part",te:"ఆకు లేదా ప్రభావిత భాగం యొక్క క్లోజప్"},
+  diseaseAnalyzingText:{en:"🔎 Running per-crop model… screening for disease…",te:"🔎 పంట-వారీ మోడల్ నడుపుతోంది… వ్యాధి కోసం స్క్రీనింగ్…"},
+  diseaseScanBtn:{en:"Scan for Disease",te:"వ్యాధి కోసం స్కాన్ చేయండి"},
+  diseaseReportTitle:{en:"Disease Report",te:"వ్యాధి నివేదిక"},
+  diseaseReportPlaceholder:{en:"Select a crop and upload a leaf photo to screen it.",te:"పంటను ఎంచుకుని ఆకు ఫోటో అప్‌లోడ్ చేయండి."},
+  diseaseSelectCropFirst:{en:"Choose the crop above first, then upload the leaf photo.",te:"ముందుగా పంటను ఎంచుకోండి, తర్వాత ఆకు ఫోటో అప్‌లోడ్ చేయండి."},
+  diseaseLevelTitle:{en:"Disease Level",te:"వ్యాధి స్థాయి"},
+  diseaseRootCauseTitle:{en:"Root Cause Identified",te:"గుర్తించిన మూల కారణం"},
+  diseasePathogenLabel:{en:"Pathogen / Agent",te:"వ్యాధికారక / కారకం"},
+  diseaseLevelMildDesc:{en:"Early / limited infection — act soon to stop spread.",te:"ప్రారంభ / పరిమిత సంక్రమణ — వ్యాప్తిని ఆపడానికి త్వరగా చర్య తీసుకోండి."},
+  diseaseLevelModerateDesc:{en:"Established infection — treat promptly and monitor neighbouring plants.",te:"స్థిరపడిన సంక్రమణ — వెంటనే చికిత్స చేసి పక్కని మొక్కలను పర్యవేక్షించండి."},
+  diseaseLevelHighDesc:{en:"Severe infection — high risk of yield loss; treat immediately and remove heavily affected tissue.",te:"తీవ్రమైన సంక్రమణ — దిగుబడి నష్టం ఎక్కువ; వెంటనే చికిత్స చేసి తీవ్రంగా ప్రభావిత భాగాలను తొలగించండి."},
+  diseaseHealthyRoot:{en:"No pathogenic pattern detected. Maintain good field hygiene and balanced nutrition.",te:"వ్యాధికారక లక్షణాలు కనబడలేదు. మంచి పొలం పరిశుభ్రత మరియు సమతుల్య పోషణ కొనసాగించండి."},
+  diseaseRejNotLeaf:{en:"Doesn't look like a leaf/plant close-up. Upload a clear photo of the affected leaf.",te:"ఆకు క్లోజప్‌లా లేదు. ప్రభావిత ఆకు యొక్క స్పష్టమైన ఫోటో అప్‌లోడ్ చేయండి."},
+  diseaseCropAutoSet:{en:"Crop auto-set from photo: {crop}",te:"ఫోటో నుండి పంట స్వయంగా సెట్ చేయబడింది: {crop}"},
+  diseaseCropMismatch:{en:"Photo looks more like {detected}. Selected crop is {selected}. Diagnosis uses the selected crop — change it if needed.",te:"ఫోటో {detected} లా కనిపిస్తోంది. ఎంచుకున్న పంట {selected}. నిర్ధారణ ఎంచుకున్న పంట ఆధారంగా — అవసరమైతే మార్చండి."},
+  diseaseAnyCropOk:{en:"Photos of any supported crop are accepted. Crop is used only to pick the right disease list.",te:"ఏదైనా మద్దతు ఉన్న పంట ఫోటోలు అంగీకరించబడతాయి. పంట సరైన వ్యాధి జాబితా ఎంపికకు మాత్రమే ఉపయోగించబడుతుంది."},
+  diseaseModelBadge:{en:"model:",te:"మోడల్:"},
+  diseaseHealthyTitle:{en:"No disease pattern detected",te:"వ్యాధి లక్షణాలు కనబడలేదు"},
+  diseaseConfidence:{en:"confidence",te:"నమ్మకం"},
+  diseaseSeverityLabel:{en:"Severity",te:"తీవ్రత"},
+  severityNone:{en:"None",te:"లేదు"}, severityMild:{en:"Mild",te:"తేలికపాటి"}, severityModerate:{en:"Moderate",te:"మధ్యస్థం"}, severityHigh:{en:"High",te:"అధికం"},
+  diseaseSymptomsTitle:{en:"Symptom Signals Detected",te:"గుర్తించిన లక్షణ సంకేతాలు"},
+  symYellow:{en:"Yellowing",te:"పసుపు రంగు"}, symBrown:{en:"Brown/necrotic patches",te:"గోధుమ/నెక్రోటిక్ మచ్చలు"},
+  symWhite:{en:"White/grey powdery coating",te:"తెలుపు/బూడిద పొడి పూత"}, symDark:{en:"Dark lesions/pustules",te:"ముదురు గాయాలు/పస్టూల్స్"},
+  diseaseTreatmentTitle:{en:"Recommended Action",te:"సిఫారసు చేసిన చర్య"},
+  diseaseNotesTitle:{en:"Notes",te:"గమనికలు"},
+  diseaseModelDisclaimer:{en:"Per-crop on-device model: MobileNet CNN confirms it's foliage, then a leaf-symptom heuristic (yellowing / necrotic / powdery / lesion color ratios) trained per crop's known disease set picks the closest match. This is a screening aid, not a lab diagnosis — confirm with your local agriculture extension office before treatment.",
+                          te:"పంట-వారీ మోడల్: MobileNet CNN ఆకు అని నిర్ధారిస్తుంది, తర్వాత లక్షణ నిష్పత్తుల ఆధారంగా దగ్గరి వ్యాధిని ఎంచుకుంటుంది. ఇది స్క్రీనింగ్ సహాయం మాత్రమే — చికిత్సకు ముందు మీ స్థానిక వ్యవసాయ కార్యాలయాన్ని సంప్రదించండి."}
+};
+
+function t(key, vars){
+  const entry = I18N[key];
+  let str = entry ? (entry[currentLang] || entry.en) : key;
+  if(vars) Object.keys(vars).forEach(k => { str = str.replace(new RegExp('\\{'+k+'\\}','g'), vars[k]); });
+  return str;
+}
+
+const CROP_KEY_MAP = {Rice:"cropRice",Wheat:"cropWheat",Maize:"cropMaize",Cotton:"cropCotton",Sugarcane:"cropSugarcane",Groundnut:"cropGroundnut",Pulses:"cropPulses",Vegetables:"cropVegetables"};
+const STATUS_KEY_MAP = {Low:"statusLow",Medium:"statusMedium",High:"statusHigh"};
+const PH_KEY_MAP = {Acidic:"phAcidic",Neutral:"phNeutral",Alkaline:"phAlkaline"};
+const VISUAL_KEY_MAP = {
+  green:{label:"colorGreenLabel",hint:"colorGreenHint"},
+  darkSoil:{label:"colorDarkLabel",hint:"colorDarkHint"},
+  medSoil:{label:"colorMediumLabel",hint:"colorMediumHint"},
+  lightSoil:{label:"colorLightLabel",hint:"colorLightHint"}
+};
+const REJECT_KEY_MAP = {flat:"rejFlat",document:"rejDocument",notSoilCrop:"rejNotSoilCrop",unreadable:"rejUnreadable"};
+
+function applyStaticTranslations(){
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.getAttribute('data-i18n')); });
+  document.querySelectorAll('#crop option').forEach(opt => {
+    const key = CROP_KEY_MAP[opt.value]; if(key) opt.textContent = t(key);
+  });
+  document.getElementById('htmlRoot').setAttribute('lang', currentLang);
+  document.getElementById('langBtnEn').classList.toggle('lang-active', currentLang==='en');
+  document.getElementById('langBtnTe').classList.toggle('lang-active', currentLang==='te');
+}
+function setLanguage(lang){
+  currentLang = lang; applyStaticTranslations();
+  Object.keys(FIELD_RULES).forEach(id => { if(document.getElementById(id).classList.contains('invalid')) validateField(id); });
+  if(lastReportContext) renderReport(lastReportContext);
+  if(lastDiseaseContext) renderDiseaseReport(lastDiseaseContext);
+  renderHistory();
+}
 function showView(name){
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  document.getElementById('view-' + name).classList.add('active');
-  document.querySelectorAll('nav .tabs button').forEach(b => b.classList.remove('active'));
+  document.getElementById('view-'+name).classList.add('active');
+  document.querySelectorAll('nav .tabs > button[data-tab]').forEach(b => b.classList.remove('active'));
   document.querySelector(`nav .tabs button[data-tab="${name}"]`).classList.add('active');
 }
 
-// ---------- field validation ----------
-const FIELD_RULES = {
-  N:  {label:"Nitrogen",       min:0, max:1000},
-  P:  {label:"Phosphorus",     min:0, max:300},
-  K:  {label:"Potassium",      min:0, max:1000},
-  pH: {label:"Soil pH",        min:0, max:14},
-  OC: {label:"Organic carbon", min:0, max:20},
-};
-
+const FIELD_RULES = {N:{labelKey:"fN",min:0,max:1000},P:{labelKey:"fP",min:0,max:300},K:{labelKey:"fK",min:0,max:1000},pH:{labelKey:"fpH",min:0,max:14},OC:{labelKey:"fOC",min:0,max:20}};
 function validateField(id){
-  const rule = FIELD_RULES[id];
-  const input = document.getElementById(id);
-  const errEl = document.getElementById('err-' + id);
-  const raw = input.value.trim();
-
+  const rule = FIELD_RULES[id], input = document.getElementById(id), errEl = document.getElementById('err-'+id);
+  const raw = input.value.trim(), fieldLabel = t(rule.labelKey);
   let message = '';
-  if(raw === ''){
-    message = `${rule.label} is required.`;
-  } else {
+  if(raw==='') message = t('fieldRequired',{field:fieldLabel});
+  else {
     const val = parseFloat(raw);
-    if(Number.isNaN(val)){
-      message = `${rule.label} must be a number.`;
-    } else if(val < rule.min || val > rule.max){
-      message = `${rule.label} should be between ${rule.min} and ${rule.max}.`;
-    }
+    if(Number.isNaN(val)) message = t('fieldMustBeNumber',{field:fieldLabel});
+    else if(val < rule.min || val > rule.max) message = t('fieldRange',{field:fieldLabel,min:rule.min,max:rule.max});
   }
-
-  if(message){
-    input.classList.add('invalid');
-    errEl.textContent = message;
-    errEl.classList.add('show');
-    return false;
-  } else {
-    input.classList.remove('invalid');
-    errEl.classList.remove('show');
-    return true;
-  }
+  if(message){ input.classList.add('invalid'); errEl.textContent = message; errEl.classList.add('show'); return false; }
+  else { input.classList.remove('invalid'); errEl.classList.remove('show'); return true; }
 }
-
 Object.keys(FIELD_RULES).forEach(id => {
   const input = document.getElementById(id);
   input.addEventListener('input', () => validateField(id));
   input.addEventListener('blur', () => validateField(id));
 });
+function validateAllFields(){ return Object.keys(FIELD_RULES).map(id => validateField(id)).every(ok => ok); }
 
-function validateAllFields(){
-  const results = Object.keys(FIELD_RULES).map(id => validateField(id));
-  return results.every(ok => ok);
-}
-
-// ---------- photo upload handling ----------
-let currentPhotoDataUrl = null;
-let currentPhotoName = null;
-
-const MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5MB
-const ALLOWED_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
-
+let currentPhotoDataUrl = null, currentPhotoName = null, currentPhotoAnalysis = null, lastReportContext = null;
+const MAX_PHOTO_BYTES = 5*1024*1024;
 const photoDrop = document.getElementById('photoDrop');
 const photoInput = document.getElementById('photoInput');
 const photoPreviewWrap = document.getElementById('photoPreviewWrap');
@@ -456,252 +516,981 @@ const photoPreviewImg = document.getElementById('photoPreviewImg');
 const photoFileName = document.getElementById('photoFileName');
 const photoRemoveBtn = document.getElementById('photoRemoveBtn');
 const photoError = document.getElementById('err-photo');
+const photoAnalyzing = document.getElementById('photoAnalyzing');
+const autoFillMsg = document.getElementById('autoFillMsg');
 
-function showPhotoError(message){
-  photoError.textContent = message;
-  photoError.classList.add('show');
-  photoDrop.classList.add('invalid-drop');
-}
-function clearPhotoError(){
-  photoError.textContent = '';
-  photoError.classList.remove('show');
-  photoDrop.classList.remove('invalid-drop');
+function showPhotoError(msg){ photoError.textContent = msg; photoError.classList.add('show'); photoDrop.classList.add('invalid-drop'); autoFillMsg.classList.remove('show'); }
+function clearPhotoError(){ photoError.textContent = ''; photoError.classList.remove('show'); photoDrop.classList.remove('invalid-drop'); }
+
+// ============================================================
+// REAL OBJECT DETECTION (MobileNet / TensorFlow.js)
+// ------------------------------------------------------------
+// The previous version only measured pixel colors — it never
+// actually recognized *what* was in the photo. This block loads
+// a real pretrained CNN (MobileNet, trained on 1.28M ImageNet
+// photos across ~1000 object classes) and classifies the image
+// before any color heuristics run. It can genuinely tell a dog
+// from a laptop from a leaf, which raw color math cannot.
+// ============================================================
+let mobilenetModel = null;
+let mobilenetLoadPromise = null;
+
+function loadMobilenet(){
+  if(mobilenetModel) return Promise.resolve(mobilenetModel);
+  if(mobilenetLoadPromise) return mobilenetLoadPromise;
+  mobilenetLoadPromise = mobilenet.load({version:2, alpha:1.0}).then(m => { mobilenetModel = m; return m; });
+  return mobilenetLoadPromise;
 }
 
-function handlePhotoFile(file){
+// ImageNet class-name keywords that indicate the photo is plausibly
+// soil / a crop / vegetation / farmland. MobileNet's 1000 classes don't
+// include a literal "soil" class, so we key on the closest agricultural
+// and plant-related synsets it does have.
+const CROP_ALLOW_KEYWORDS = [
+  'corn','ear','cabbage','cauliflower','broccoli','artichoke','mushroom',
+  'strawberry','banana','orange','lemon','pineapple','fig','pomegranate',
+  'squash','cucumber','bell pepper','head cabbage','custard apple',
+  'rapeseed','daisy',"yellow lady's slipper",'sea urchin','hay','maize',
+  'plant','leaf','vine','vegetable','crop','greenhouse','soil','field',
+  // Extra foliage / farm keywords so photos of other crops are accepted more readily
+  'grass','wheat','rice','cotton','sugar','cane','peanut','groundnut','bean',
+  'pea','pulse','foliage','stem','shoot','seedling','farm','agriculture',
+  'orchard','plantation','meadow','pasture','herb','weed','flower'
+];
+
+// ImageNet classes that are confidently NOT soil/crop photos — people,
+// animals, vehicles, electronics, furniture, documents, etc. If MobileNet's
+// top prediction lands here with reasonable confidence, we reject outright
+// regardless of what the color heuristic thinks.
+const NONSOIL_BLOCK_KEYWORDS = [
+  'person','man','woman','face','portrait','dog','cat','bird','fish',
+  'car','truck','bicycle','motorcycle','airplane','boat','ship','train',
+  'laptop','computer','keyboard','mouse','monitor','screen','television',
+  'phone','cellphone','remote','camera',
+  'chair','table','sofa','bed','desk','bookcase','wardrobe',
+  'shirt','jean','dress','shoe','sandal','sock','hat','sunglass',
+  'book','envelope','menu','packet','carton','box','bottle','cup','plate',
+  'guitar','piano','drum','violin',
+  'building','castle','church','mosque','library','bridge',
+  'sky','cloud','volcano','iceberg','seashore','lakeside',
+  'toy','ball','balloon','kite','umbrella',
+  'clock','vase','pillow','curtain','mirror',
+  'coin','money','paper','web site','website'
+];
+
+function matchesKeyword(className, keywordList){
+  const lower = className.toLowerCase();
+  return keywordList.some(kw => lower.includes(kw));
+}
+
+// Runs MobileNet classification on an <img> element.
+// Returns {topClass, topProb, looksLikeCrop, looksNonSoil, predictions}
+async function classifyWithMobileNet(imgEl){
+  const model = await loadMobilenet();
+  const predictions = await model.classify(imgEl, 5);
+  if(!predictions || predictions.length === 0){
+    return {topClass:null, topProb:0, looksLikeCrop:false, looksNonSoil:false, predictions:[]};
+  }
+  const top = predictions[0];
+  const looksNonSoil = predictions.slice(0,3).some(p => p.probability > 0.15 && matchesKeyword(p.className, NONSOIL_BLOCK_KEYWORDS));
+  const looksLikeCrop = predictions.slice(0,5).some(p => matchesKeyword(p.className, CROP_ALLOW_KEYWORDS));
+  return {topClass: top.className, topProb: top.probability, looksLikeCrop, looksNonSoil, predictions};
+}
+
+function rgbToHsv(r,g,b){
+  r/=255; g/=255; b/=255;
+  const max=Math.max(r,g,b), min=Math.min(r,g,b), d=max-min;
+  let h=0;
+  if(d!==0){ switch(max){case r:h=((g-b)/d)%6;break; case g:h=(b-r)/d+2;break; default:h=(r-g)/d+4;} h*=60; if(h<0)h+=360; }
+  return {h, s: max===0?0:d/max, v:max};
+}
+
+function predictFromPhoto(a){
+  const {brightness, greenPct, colorKey} = a;
+  let OC;
+  if(colorKey==='darkSoil') OC = 0.85 + (1-brightness/255)*0.6;
+  else if(colorKey==='medSoil') OC = 0.45 + (1-brightness/255)*0.35;
+  else if(colorKey==='lightSoil') OC = 0.22 + (1-brightness/255)*0.25;
+  else OC = 0.55 + greenPct*0.4;
+  OC = Math.max(0.15, Math.min(1.8, +OC.toFixed(2)));
+
+  let N = 180 + OC*280 + greenPct*120; N = Math.max(80, Math.min(650, Math.round(N)));
+  let P = 8 + (1-brightness/255)*22 + greenPct*8; P = Math.max(4, Math.min(45, +P.toFixed(1)));
+  let K = 90 + (1-brightness/255)*160 + greenPct*40; K = Math.max(50, Math.min(420, Math.round(K)));
+
+  let pH;
+  if(colorKey==='lightSoil') pH = 5.6 + (brightness/255)*1.4;
+  else if(colorKey==='darkSoil') pH = 6.1 + (1-brightness/255)*0.9;
+  else if(colorKey==='green') pH = 6.3 + greenPct*0.6;
+  else pH = 6.4 + (brightness/255-0.5)*1.2;
+  pH = Math.max(4.8, Math.min(8.4, +pH.toFixed(2)));
+
+  return {N, P, K, pH, OC};
+}
+
+function scanPhoto(dataUrl, callback){
+  const img = new Image();
+  img.onload = function(){
+    try{
+      const size=96, canvas=document.createElement('canvas');
+      canvas.width=size; canvas.height=size;
+      const ctx=canvas.getContext('2d');
+      ctx.drawImage(img,0,0,size,size);
+      const data=ctx.getImageData(0,0,size,size).data;
+      let rSum=0,gSum=0,bSum=0,total=0;
+      let greenCount=0,brownCount=0,whiteCount=0,skinCount=0,grayCount=0,blueCount=0,highSatCount=0;
+      const brightnessValues=[];
+      for(let i=0;i<data.length;i+=4){
+        const r=data[i],g=data[i+1],b=data[i+2];
+        rSum+=r; gSum+=g; bSum+=b; total++;
+        const bright=(r+g+b)/3; brightnessValues.push(bright);
+        const {h,s,v}=rgbToHsv(r,g,b);
+        if(v>0.90 && s<0.08) whiteCount++;
+        const isGreen=(h>=55&&h<=165)&&s>0.18&&v>0.12&&v<0.92;
+        const isBrown=((h>=5&&h<=55)||(h>=350&&h<=360))&&s>0.12&&s<0.88&&v>0.06&&v<0.90;
+        const isDarkSoil=v<0.32&&s<0.50;
+        const isSkin=((h>=5&&h<=45)&&s>0.15&&s<0.65&&v>0.35&&v<0.95)&&r>g&&g>b&&(r-b)>20;
+        const isGray=s<0.12&&v>0.15&&v<0.85;
+        const isBlue=(h>=185&&h<=250)&&s>0.25&&v>0.20;
+        if(s>0.78&&v>0.35) highSatCount++;
+        if(isGreen) greenCount++;
+        else if(isBrown||isDarkSoil) brownCount++;
+        if(isSkin) skinCount++;
+        if(isGray) grayCount++;
+        if(isBlue) blueCount++;
+      }
+      const r=Math.round(rSum/total), g=Math.round(gSum/total), b=Math.round(bSum/total);
+      const brightness=Math.round((r+g+b)/3);
+      const greenPct=greenCount/total, brownPct=brownCount/total, whitePct=whiteCount/total;
+      const skinPct=skinCount/total, grayPct=grayCount/total, bluePct=blueCount/total;
+      const highSatPct=highSatCount/total;
+      const mean=brightnessValues.reduce((a,v)=>a+v,0)/brightnessValues.length;
+      const variance=brightnessValues.reduce((a,v)=>a+(v-mean)*(v-mean),0)/brightnessValues.length;
+      const stdDev=Math.sqrt(variance);
+      const soilCropPct = greenPct + brownPct;
+
+      let isSoilOrCrop=true, rejectKey='';
+      if(stdDev < 14){ isSoilOrCrop=false; rejectKey='flat'; }
+      else if(whitePct > 0.38){ isSoilOrCrop=false; rejectKey='document'; }
+      else if(skinPct > 0.18){ isSoilOrCrop=false; rejectKey='notSoilCrop'; }
+      else if(grayPct > 0.45){ isSoilOrCrop=false; rejectKey='notSoilCrop'; }
+      else if(bluePct > 0.28){ isSoilOrCrop=false; rejectKey='notSoilCrop'; }
+      else if(highSatPct > 0.22){ isSoilOrCrop=false; rejectKey='notSoilCrop'; }
+      else if(soilCropPct < 0.38){ isSoilOrCrop=false; rejectKey='notSoilCrop'; }
+      else {
+        const {h:avgH, s:avgS} = rgbToHsv(r,g,b);
+        const isEarthyOrGreen =
+          (avgH>=8 && avgH<=70) ||
+          (avgH>=70 && avgH<=160 && avgS>0.12) ||
+          (avgH>=350 || avgH<=15);
+        if(!isEarthyOrGreen && avgS > 0.18){
+          isSoilOrCrop=false; rejectKey='notSoilCrop';
+        }
+      }
+
+      let colorKey=null;
+      if(isSoilOrCrop){
+        if(greenPct >= brownPct && greenPct > 0.18) colorKey='green';
+        else if(brightness < 80) colorKey='darkSoil';
+        else if(brightness < 145) colorKey='medSoil';
+        else colorKey='lightSoil';
+      }
+      const base={isSoilOrCrop,rejectKey,r,g,b,brightness,greenPct,brownPct,colorKey,stdDev};
+      if(isSoilOrCrop) base.predicted = predictFromPhoto(base);
+      callback(base);
+    }catch(e){ callback({isSoilOrCrop:false,rejectKey:'unreadable'}); }
+  };
+  img.onerror = () => callback({isSoilOrCrop:false,rejectKey:'unreadable'});
+  img.src = dataUrl;
+}
+
+function autoFillForm(pred){
+  document.getElementById('N').value = pred.N;
+  document.getElementById('P').value = pred.P;
+  document.getElementById('K').value = pred.K;
+  document.getElementById('pH').value = pred.pH;
+  document.getElementById('OC').value = pred.OC;
+  Object.keys(FIELD_RULES).forEach(id => {
+    document.getElementById(id).classList.remove('invalid');
+    document.getElementById('err-'+id).classList.remove('show');
+  });
+  autoFillMsg.classList.add('show');
+  setTimeout(() => autoFillMsg.classList.remove('show'), 4000);
+}
+
+function loadImageElement(dataUrl){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+}
+
+async function handlePhotoFile(file){
   clearPhotoError();
-  if(!file){ return; }
-
-  const isAllowedType = file.type.startsWith('image/');
-  if(!isAllowedType){
-    showPhotoError('Please upload an image file (JPG, PNG, WEBP, or HEIC).');
-    photoInput.value = '';
-    return;
-  }
-  if(file.size > MAX_PHOTO_BYTES){
-    const sizeMb = (file.size / (1024*1024)).toFixed(1);
-    showPhotoError(`Image is ${sizeMb}MB — please upload a photo under 5MB.`);
-    photoInput.value = '';
-    return;
-  }
+  if(!file) return;
+  if(!file.type.startsWith('image/')){ showPhotoError(t('photoTypeError')); photoInput.value=''; return; }
+  if(file.size > MAX_PHOTO_BYTES){ showPhotoError(t('photoSizeError',{size:(file.size/(1024*1024)).toFixed(1)})); photoInput.value=''; return; }
 
   const reader = new FileReader();
-  reader.onerror = function(){
-    showPhotoError('Could not read that file — please try a different photo.');
-  };
-  reader.onload = function(e){
-    currentPhotoDataUrl = e.target.result;
-    currentPhotoName = file.name;
-    photoPreviewImg.src = currentPhotoDataUrl;
-    photoFileName.textContent = file.name;
-    photoPreviewWrap.style.display = 'block';
-    photoDrop.style.display = 'none';
+  reader.onerror = () => showPhotoError(t('photoReadError'));
+  reader.onload = async function(e){
+    const dataUrl = e.target.result;
+    photoAnalyzing.classList.add('show');
+    autoFillMsg.classList.remove('show');
+
+    let imgEl, mnResult;
+    try{
+      imgEl = await loadImageElement(dataUrl);
+      mnResult = await classifyWithMobileNet(imgEl);
+    }catch(err){
+      photoAnalyzing.classList.remove('show');
+      showPhotoError(t('rejUnreadable'));
+      photoInput.value = '';
+      return;
+    }
+
+    // Real object-recognition gate: if MobileNet confidently thinks this is
+    // a person/animal/vehicle/gadget/etc., reject before running any color math.
+    if(mnResult.looksNonSoil){
+      photoAnalyzing.classList.remove('show');
+      currentPhotoDataUrl = null; currentPhotoName = null; currentPhotoAnalysis = null;
+      photoInput.value = '';
+      showPhotoError(t('rejNotSoilCrop') + `  [detected: ${mnResult.topClass}]`);
+      return;
+    }
+
+    // Color/texture heuristic still decides soil-color classification
+    // (MobileNet has no literal "soil" class), but now runs only after
+    // real object recognition has cleared the photo.
+    scanPhoto(dataUrl, function(result){
+      photoAnalyzing.classList.remove('show');
+      // Require either the color heuristic OR MobileNet to see crop/vegetation evidence.
+      const passes = result.isSoilOrCrop || mnResult.looksLikeCrop;
+      if(!passes){
+        currentPhotoDataUrl = null; currentPhotoName = null; currentPhotoAnalysis = null;
+        photoInput.value = '';
+        showPhotoError(t(REJECT_KEY_MAP[result.rejectKey] || 'rejNotSoilCrop'));
+        return;
+      }
+      // If color heuristic didn't classify a colorKey (e.g. only MobileNet passed it),
+      // still fall back to a best-guess color bucket so predictions can run.
+      const finalResult = result.isSoilOrCrop ? result : {
+        ...result, isSoilOrCrop:true,
+        colorKey: result.colorKey || (result.greenPct > result.brownPct ? 'green' : (result.brightness < 110 ? 'darkSoil' : 'medSoil'))
+      };
+      finalResult.predicted = predictFromPhoto(finalResult);
+      finalResult.mobilenet = {topClass: mnResult.topClass, topProb: mnResult.topProb};
+
+      currentPhotoDataUrl = dataUrl;
+      currentPhotoName = file.name;
+      currentPhotoAnalysis = finalResult;
+      photoPreviewImg.src = dataUrl;
+      photoFileName.textContent = file.name;
+      photoPreviewWrap.style.display = 'block';
+      photoDrop.style.display = 'none';
+
+      autoFillForm(finalResult.predicted);
+    });
   };
   reader.readAsDataURL(file);
 }
 
-photoInput.addEventListener('change', function(e){
-  if(e.target.files && e.target.files[0]) handlePhotoFile(e.target.files[0]);
+photoInput.addEventListener('change', e => { if(e.target.files?.[0]) handlePhotoFile(e.target.files[0]); });
+['dragover','dragenter'].forEach(evt => photoDrop.addEventListener(evt, e => { e.preventDefault(); photoDrop.classList.add('dragover'); }));
+['dragleave','drop'].forEach(evt => photoDrop.addEventListener(evt, e => { e.preventDefault(); photoDrop.classList.remove('dragover'); }));
+photoDrop.addEventListener('drop', e => { e.preventDefault(); if(e.dataTransfer.files?.[0]) handlePhotoFile(e.dataTransfer.files[0]); });
+photoRemoveBtn.addEventListener('click', () => {
+  currentPhotoDataUrl = null; currentPhotoName = null; currentPhotoAnalysis = null;
+  photoInput.value = ''; clearPhotoError(); photoAnalyzing.classList.remove('show');
+  autoFillMsg.classList.remove('show');
+  photoPreviewWrap.style.display = 'none'; photoDrop.style.display = 'block';
 });
 
-// drag & drop support
-['dragover','dragenter'].forEach(evt => {
-  photoDrop.addEventListener(evt, function(e){
-    e.preventDefault();
-    photoDrop.classList.add('dragover');
-  });
-});
-['dragleave','drop'].forEach(evt => {
-  photoDrop.addEventListener(evt, function(e){
-    e.preventDefault();
-    photoDrop.classList.remove('dragover');
-  });
-});
-photoDrop.addEventListener('drop', function(e){
-  e.preventDefault();
-  photoDrop.classList.remove('dragover');
-  if(e.dataTransfer.files && e.dataTransfer.files[0]) handlePhotoFile(e.dataTransfer.files[0]);
-});
+// ============================================================
+// CROP DISEASE SCAN
+// ------------------------------------------------------------
+// Honest scope note: there is no real labeled disease-image
+// dataset or training pipeline available in this browser-only
+// app, so this is NOT a model trained on photos of diseased
+// crops. What it actually does, per crop:
+//   1) MobileNet (the same pretrained CNN used above) confirms
+//      the photo is plausibly foliage/plant matter, not some
+//      unrelated object — a real, genuine check.
+//   2) A leaf-symptom color/texture heuristic (yellowing %,
+//      brown/necrotic %, white-powdery %, dark-lesion %) is
+//      computed from the pixels, then matched against a
+//      per-crop table of that crop's most common field
+//      diseases and their typical dominant symptom colors.
+// This is a screening aid to point a farmer toward the likely
+// culprit and next step — not a diagnostic-grade classifier.
+// ============================================================
 
-photoRemoveBtn.addEventListener('click', function(){
-  currentPhotoDataUrl = null;
-  currentPhotoName = null;
-  photoInput.value = '';
-  clearPhotoError();
-  photoPreviewWrap.style.display = 'none';
-  photoDrop.style.display = 'block';
-});
-
-// ---------- agronomic rule engine (mirrors the Python training-data generator) ----------
-const CROP_GRD = {
-  Rice:       {N:48, P:24, K:24},
-  Wheat:      {N:48, P:24, K:16},
-  Maize:      {N:60, P:30, K:20},
-  Cotton:     {N:40, P:20, K:20},
-  Sugarcane:  {N:100, P:40, K:40},
-  Groundnut:  {N:10, P:20, K:20},
-  Pulses:     {N:8, P:20, K:12},
-  Vegetables: {N:50, P:25, K:25},
+const DISEASE_DB = {
+  Rice: [
+    {id:'riceBlast', dominant:'dark', secondary:'brown'},
+    {id:'riceBLB', dominant:'yellow', secondary:'brown'},
+    {id:'riceBrownSpot', dominant:'brown', secondary:'dark'},
+    {id:'riceSheathBlight', dominant:'brown', secondary:'white'}
+  ],
+  Wheat: [
+    {id:'wheatYellowRust', dominant:'yellow', secondary:'dark'},
+    {id:'wheatBrownRust', dominant:'brown', secondary:'dark'},
+    {id:'wheatPowderyMildew', dominant:'white', secondary:'yellow'},
+    {id:'wheatLeafBlight', dominant:'brown', secondary:'yellow'}
+  ],
+  Maize: [
+    {id:'maizeNCLB', dominant:'brown', secondary:'dark'},
+    {id:'maizeCommonRust', dominant:'dark', secondary:'brown'},
+    {id:'maizeGrayLeafSpot', dominant:'brown', secondary:'white'}
+  ],
+  Cotton: [
+    {id:'cottonBacterialBlight', dominant:'brown', secondary:'dark'},
+    {id:'cottonLeafCurl', dominant:'yellow', secondary:'brown'},
+    {id:'cottonGreyMildew', dominant:'white', secondary:'yellow'}
+  ],
+  Sugarcane: [
+    {id:'sugarcaneRedRot', dominant:'brown', secondary:'dark'},
+    {id:'sugarcaneRust', dominant:'dark', secondary:'brown'},
+    {id:'sugarcaneSmut', dominant:'dark', secondary:'brown'}
+  ],
+  Groundnut: [
+    {id:'groundnutEarlyLeafSpot', dominant:'brown', secondary:'dark'},
+    {id:'groundnutLateLeafSpot', dominant:'dark', secondary:'brown'},
+    {id:'groundnutRust', dominant:'dark', secondary:'brown'}
+  ],
+  Pulses: [
+    {id:'pulsesPowderyMildew', dominant:'white', secondary:'yellow'},
+    {id:'pulsesRust', dominant:'dark', secondary:'brown'},
+    {id:'pulsesLeafSpot', dominant:'brown', secondary:'dark'}
+  ],
+  Vegetables: [
+    {id:'vegPowderyMildew', dominant:'white', secondary:'yellow'},
+    {id:'vegBlight', dominant:'brown', secondary:'dark'},
+    {id:'vegLeafSpot', dominant:'dark', secondary:'brown'},
+    {id:'vegMosaicVirus', dominant:'yellow', secondary:'brown'}
+  ]
 };
 
-function classify(value, low, high){
-  if(value < low) return "Low";
-  if(value < high) return "Medium";
-  return "High";
+const DISEASE_I18N = {
+  riceBlast:{
+    name:{en:"Rice Blast",te:"వరి అగ్గి తెగులు"},
+    pathogen:{en:"Fungus — Magnaporthe oryzae",te:"శిలీంద్రం — మాగ్నాపోర్థే ఒరిజే"},
+    rootCause:{en:"High humidity + excess nitrogen + susceptible variety; spores splash from infected residue and water.",te:"అధిక తేమ + అధిక నత్రజని + సున్నిత రకం; సోకిన అవశేషాలు మరియు నీటి నుండి స్పోర్లు వ్యాపిస్తాయి."},
+    treatment:{en:"Spray tricyclazole or a triazole fungicide at first sign; avoid excess nitrogen; use a resistant variety next season.",te:"గుర్తించిన వెంటనే ట్రైసైక్లజోల్/ట్రయజోల్ శిలీంద్రనాశిని పిచికారీ చేయండి; అధిక నత్రజని వాడకండి; తర్వాతి సీజన్‌లో నిరోధక రకం వాడండి."}
+  },
+  riceBLB:{
+    name:{en:"Bacterial Leaf Blight",te:"బాక్టీరియా ఆకుమచ్చ తెగులు"},
+    pathogen:{en:"Bacterium — Xanthomonas oryzae pv. oryzae",te:"బాక్టీరియం — జాంతోమోనాస్ ఒరిజే"},
+    rootCause:{en:"Flooded fields, wind-driven rain, and infected seed; bacteria enter through hydathodes and wounds.",te:"నీరు నిలిచిన పొలాలు, గాలి-వర్షం, సోకిన విత్తనం; బాక్టీరియా హైడతోడ్స్ మరియు గాయాల ద్వారా ప్రవేశిస్తాయి."},
+    treatment:{en:"Drain standing water, avoid overhead irrigation, apply copper-based bactericide, use resistant varieties.",te:"నీటిని తీసివేయండి, పైనుండి నీరు పెట్టడం మానండి, రాగి ఆధారిత మందు వాడండి, నిరోధక రకాలు వాడండి."}
+  },
+  riceBrownSpot:{
+    name:{en:"Brown Spot",te:"గోధుమ మచ్చ తెగులు"},
+    pathogen:{en:"Fungus — Bipolaris oryzae",te:"శిలీంద్రం — బైపోలారిస్ ఒరిజే"},
+    rootCause:{en:"Potassium deficiency, drought stress, and continuous rice cropping; seed-borne and airborne spores.",te:"పొటాషియం లోపం, కరువు ఒత్తిడి, నిరంతర వరి పంట; విత్తనం మరియు గాలి ద్వారా స్పోర్లు."},
+    treatment:{en:"Apply mancozeb or propiconazole; correct potassium deficiency; use certified seed.",te:"మాంకోజెబ్/ప్రొపికొనజోల్ వాడండి; పొటాషియం లోపం సరిచేయండి; ధృవీకరించిన విత్తనం వాడండి."}
+  },
+  riceSheathBlight:{
+    name:{en:"Sheath Blight",te:"కాండం తెగులు"},
+    pathogen:{en:"Fungus — Rhizoctonia solani",te:"శిలీంద్రం — రైజోక్టోనియా సోలాని"},
+    rootCause:{en:"Dense planting, high N fertilizer, and warm humid canopy; sclerotia survive in soil and stubble.",te:"సాంద్ర నాటు, అధిక నత్రజని, వెచ్చని తేమ కవర్; స్క్లిరోటియా నేల మరియు కాండంలో ఉంటాయి."},
+    treatment:{en:"Reduce plant density, avoid excess nitrogen, apply hexaconazole or validamycin at tillering.",te:"మొక్కల సాంద్రత తగ్గించండి, నత్రజని తగ్గించండి, హెక్సాకొనజోల్/వాలిడామైసిన్ వాడండి."}
+  },
+  wheatYellowRust:{
+    name:{en:"Yellow (Stripe) Rust",te:"పసుపు తుప్పు తెగులు"},
+    pathogen:{en:"Fungus — Puccinia striiformis f. sp. tritici",te:"శిలీంద్రం — పక్సీనియా స్ట్రియిఫార్మిస్"},
+    rootCause:{en:"Cool moist weather, late sowing, and susceptible varieties; urediniospores travel long distances on wind.",te:"చల్లని తేమ వాతావరణం, ఆలస్య విత్తనం, సున్నిత రకాలు; యురిడినియోస్పోర్లు గాలిలో దూరం ప్రయాణిస్తాయి."},
+    treatment:{en:"Spray propiconazole or tebuconazole at first yellow stripes; sow resistant varieties, avoid late sowing.",te:"మొదటి లక్షణాల వద్దే ప్రొపికొనజోల్/టెబుకొనజోల్ పిచికారీ చేయండి; నిరోధక రకాలు వాడండి."}
+  },
+  wheatBrownRust:{
+    name:{en:"Brown (Leaf) Rust",te:"గోధుమ తుప్పు తెగులు"},
+    pathogen:{en:"Fungus — Puccinia triticina",te:"శిలీంద్రం — పక్సీనియా ట్రిటిసినా"},
+    rootCause:{en:"Mild temperatures with dew; volunteer wheat and susceptible cultivars allow continuous infection cycles.",te:"మధ్యస్థ ఉష్ణోగ్రత + మంచు; స్వచ్ఛంద గోధుమ మరియు సున్నిత రకాలు సంక్రమణ కొనసాగిస్తాయి."},
+    treatment:{en:"Apply triazole fungicide, monitor weekly in humid weather, rotate fungicide groups to avoid resistance.",te:"ట్రయజోల్ శిలీంద్రనాశిని వాడండి, తేమ వాతావరణంలో వారానికోసారి పరిశీలించండి."}
+  },
+  wheatPowderyMildew:{
+    name:{en:"Powdery Mildew",te:"బూజు తెగులు"},
+    pathogen:{en:"Fungus — Blumeria graminis f. sp. tritici",te:"శిలీంద్రం — బ్లూమీరియా గ్రామినిస్"},
+    rootCause:{en:"Dense canopy, moderate temperatures, and high humidity; excess nitrogen favours soft tissue infection.",te:"సాంద్ర కవర్, మధ్యస్థ ఉష్ణోగ్రత, అధిక తేమ; అధిక నత్రజని మృదు కణజాల సంక్రమణకు అనుకూలం."},
+    treatment:{en:"Spray wettable sulfur or a triazole fungicide; improve airflow with wider spacing.",te:"సల్ఫర్/ట్రయజోల్ మందు పిచికారీ చేయండి; మొక్కల మధ్య దూరం పెంచండి."}
+  },
+  wheatLeafBlight:{
+    name:{en:"Leaf Blight",te:"ఆకు ఎండు తెగులు"},
+    pathogen:{en:"Fungus — Alternaria / Helminthosporium complex",te:"శిలీంద్రం — ఆల్టర్నేరియా / హెల్మిన్తోస్పోరియం"},
+    rootCause:{en:"Infected stubble, warm humid weather, and continuous wheat–rice systems; spores splash from residue.",te:"సోకిన అవశేషాలు, వెచ్చని తేమ, నిరంతర గోధుమ–వరి వ్యవస్థ; స్పోర్లు అవశేషాల నుండి చిమ్ముతాయి."},
+    treatment:{en:"Apply mancozeb or a strobilurin fungicide; practice crop rotation and remove stubble.",te:"మాంకోజెబ్ మందు వాడండి; పంట మార్పిడి చేయండి, పంట అవశేషాలు తొలగించండి."}
+  },
+  maizeNCLB:{
+    name:{en:"Northern Corn Leaf Blight",te:"మొక్కజొన్న ఆకు ఎండు తెగులు"},
+    pathogen:{en:"Fungus — Exserohilum turcicum",te:"శిలీంద్రం — ఎక్సెరోహిలం టర్సికం"},
+    rootCause:{en:"Cool wet weather early in season and infected crop debris; spores spread by wind and rain splash.",te:"సీజన్ ప్రారంభంలో చల్లని తడి వాతావరణం మరియు సోకిన అవశేషాలు; స్పోర్లు గాలి మరియు వర్షం ద్వారా వ్యాపిస్తాయి."},
+    treatment:{en:"Spray mancozeb/propiconazole, rotate with a non-host crop, use resistant hybrids.",te:"మాంకోజెబ్/ప్రొపికొనజోల్ వాడండి; పంట మార్పిడి చేయండి; నిరోధక హైబ్రిడ్లు వాడండి."}
+  },
+  maizeCommonRust:{
+    name:{en:"Common Rust",te:"సాధారణ తుప్పు తెగులు"},
+    pathogen:{en:"Fungus — Puccinia sorghi",te:"శిలీంద్రం — పక్సీనియా సోర్గి"},
+    rootCause:{en:"Moderate temperatures with high humidity; urediniospores arrive on wind from distant fields.",te:"మధ్యస్థ ఉష్ణోగ్రత + అధిక తేమ; యురిడినియోస్పోర్లు దూరపు పొలాల నుండి గాలిలో వస్తాయి."},
+    treatment:{en:"Apply a triazole or strobilurin fungicide if pustules spread fast; use tolerant hybrids.",te:"పస్టూల్స్ వేగంగా వ్యాపిస్తే ట్రయజోల్ మందు వాడండి; సహన హైబ్రిడ్లు వాడండి."}
+  },
+  maizeGrayLeafSpot:{
+    name:{en:"Gray Leaf Spot",te:"బూడిద ఆకుమచ్చ తెగులు"},
+    pathogen:{en:"Fungus — Cercospora zeae-maydis",te:"శిలీంద్రం — సెర్కోస్పోరా జీ-మైడిస్"},
+    rootCause:{en:"No-till residue, warm humid nights, and continuous maize; spores splash from lower leaves upward.",te:"నో-టిల్ అవశేషాలు, వెచ్చని తేమ రాత్రులు, నిరంతర మొక్కజొన్న; స్పోర్లు క్రింది ఆకుల నుండి పైకి చిమ్ముతాయి."},
+    treatment:{en:"Rotate crops, avoid dense planting, apply a strobilurin fungicide at early lesions.",te:"పంట మార్పిడి చేయండి, సాంద్రత తగ్గించండి, తొలి దశలో మందు వాడండి."}
+  },
+  cottonBacterialBlight:{
+    name:{en:"Bacterial Blight",te:"పత్తి బాక్టీరియా తెగులు"},
+    pathogen:{en:"Bacterium — Xanthomonas citri pv. malvacearum",te:"బాక్టీరియం — జాంతోమోనాస్ సిట్రి"},
+    rootCause:{en:"Infected seed, overhead irrigation, and injuries; bacteria enter stomata and wounds in wet weather.",te:"సోకిన విత్తనం, పైనుండి నీరు, గాయాలు; తడి వాతావరణంలో బాక్టీరియా స్టోమాటా మరియు గాయాల ద్వారా ప్రవేశిస్తాయి."},
+    treatment:{en:"Use acid-delinted/treated seed, spray copper oxychloride, avoid overhead irrigation.",te:"చికిత్స చేసిన విత్తనం వాడండి, కాపర్ ఆక్సిక్లోరైడ్ పిచికారీ చేయండి."}
+  },
+  cottonLeafCurl:{
+    name:{en:"Cotton Leaf Curl Virus",te:"పత్తి ఆకు ముడత వైరస్"},
+    pathogen:{en:"Virus — Cotton leaf curl virus (CLCuV), whitefly-vectored",te:"వైరస్ — కాటన్ లీఫ్ కర్ల్ వైరస్, తెల్లదోమ వాహకం"},
+    rootCause:{en:"Whitefly (Bemisia tabaci) transmits the virus from infected plants and weeds; high vector populations drive outbreaks.",te:"తెల్లదోమ (బెమీసియా టబాసి) సోకిన మొక్కలు మరియు కలుపు నుండి వైరస్‌ను ప్రసారం చేస్తుంది."},
+    treatment:{en:"Control whitefly vector with imidacloprid/neem, remove and destroy infected plants, use tolerant hybrids.",te:"తెల్లదోమను నియంత్రించండి, వ్యాధిగ్రస్త మొక్కలను తొలగించండి, సహన హైబ్రిడ్లు వాడండి."}
+  },
+  cottonGreyMildew:{
+    name:{en:"Grey Mildew",te:"బూడిద బూజు తెగులు"},
+    pathogen:{en:"Fungus — Ramularia areola",te:"శిలీంద్రం — రాములేరియా అరియోలా"},
+    rootCause:{en:"Prolonged leaf wetness and dense canopy; cool nights favour spore germination on lower leaves.",te:"ఎక్కువసేపు ఆకు తడి మరియు సాంద్ర కవర్; చల్లని రాత్రులు క్రింది ఆకులపై స్పోర్ మొలకెత్తడానికి అనుకూలం."},
+    treatment:{en:"Spray wettable sulfur or a triazole fungicide, improve field ventilation.",te:"సల్ఫర్ మందు పిచికారీ చేయండి; పొలంలో గాలి ప్రసరణ మెరుగుపరచండి."}
+  },
+  sugarcaneRedRot:{
+    name:{en:"Red Rot",te:"ఎర్ర కుళ్ళు తెగులు"},
+    pathogen:{en:"Fungus — Colletotrichum falcatum",te:"శిలీంద్రం — కొల్లెటోట్రికం ఫాల్కేటం"},
+    rootCause:{en:"Infected setts, waterlogging, and ratoon crops; fungus invades through nodes and wounds.",te:"సోకిన విత్తన కాండాలు, నీరు నిలవడం, రాటూన్ పంట; శిలీంద్రం నోడ్స్ మరియు గాయాల ద్వారా ప్రవేశిస్తుంది."},
+    treatment:{en:"Uproot and destroy affected clumps, avoid ratooning infected fields, plant disease-free sets of resistant varieties.",te:"వ్యాధిగ్రస్త మొక్కలను తీసివేసి నాశనం చేయండి; నిరోధక రకాల ఆరోగ్యకరమైన విత్తనం వాడండి."}
+  },
+  sugarcaneRust:{
+    name:{en:"Rust",te:"చెరకు తుప్పు తెగులు"},
+    pathogen:{en:"Fungus — Puccinia melanocephala / P. kuehnii",te:"శిలీంద్రం — పక్సీనియా మెలనోసెఫాలా"},
+    rootCause:{en:"High humidity and moderate temperatures; airborne urediniospores infect young leaves repeatedly.",te:"అధిక తేమ మరియు మధ్యస్థ ఉష్ణోగ్రత; గాలిలోని యురిడినియోస్పోర్లు యువ ఆకులను మళ్లీ మళ్లీ సోకిస్తాయి."},
+    treatment:{en:"Spray a triazole fungicide in humid weather, use resistant varieties, avoid waterlogging.",te:"తేమ వాతావరణంలో ట్రయజోల్ మందు వాడండి; నీరు నిలవకుండా చూసుకోండి."}
+  },
+  sugarcaneSmut:{
+    name:{en:"Smut",te:"కుసుమ తెగులు"},
+    pathogen:{en:"Fungus — Sporisorium scitamineum",te:"శిలీంద్రం — స్పోరిసోరియం సిటమినియం"},
+    rootCause:{en:"Infected setts and soil-borne spores; whip-like sori release billions of teliospores that reinfect buds.",te:"సోకిన విత్తన కాండాలు మరియు నేల స్పోర్లు; కుసుమ కాడలు బిలియన్ల టెలియోస్పోర్లను విడుదల చేస్తాయి."},
+    treatment:{en:"Rogue out whip-bearing shoots and burn them, use hot-water-treated healthy setts, plant resistant varieties.",te:"కుసుమ కాడలను తీసివేసి కాల్చండి; ఆరోగ్యకరమైన నిరోధక రకాల విత్తనం వాడండి."}
+  },
+  groundnutEarlyLeafSpot:{
+    name:{en:"Early Leaf Spot",te:"తొలి ఆకుమచ్చ తెగులు"},
+    pathogen:{en:"Fungus — Passalora arachidicola",te:"శిలీంద్రం — పాసలోరా అరాకిడికోలా"},
+    rootCause:{en:"Infected residue and continuous groundnut; spores splash upward in warm wet weather from soil surface.",te:"సోకిన అవశేషాలు మరియు నిరంతర వేరుశనగ; వెచ్చని తడి వాతావరణంలో నేల నుండి స్పోర్లు పైకి చిమ్ముతాయి."},
+    treatment:{en:"Apply chlorothalonil or mancozeb at first spots, rotate with a non-legume crop.",te:"మొదటి మచ్చల వద్దే మాంకోజెబ్ మందు వాడండి; పంట మార్పిడి చేయండి."}
+  },
+  groundnutLateLeafSpot:{
+    name:{en:"Late Leaf Spot",te:"ఆలస్య ఆకుమచ్చ తెగులు"},
+    pathogen:{en:"Fungus — Nothopassalora personata",te:"శిలీంద్రం — నోతోపాసలోరా పర్సొనేటా"},
+    rootCause:{en:"Same residue cycle as early leaf spot but appears later; warm humid nights accelerate epidemic.",te:"తొలి ఆకుమచ్చ వలె అవశేష చక్రం కానీ ఆలస్యంగా కనిపిస్తుంది; వెచ్చని తేమ రాత్రులు వ్యాధిని వేగవంతం చేస్తాయి."},
+    treatment:{en:"Spray a triazole/strobilurin fungicide, remove crop debris after harvest.",te:"ట్రయజోల్ మందు వాడండి; కోత తర్వాత పంట అవశేషాలు తొలగించండి."}
+  },
+  groundnutRust:{
+    name:{en:"Rust",te:"వేరుశనగ తుప్పు తెగులు"},
+    pathogen:{en:"Fungus — Puccinia arachidis",te:"శిలీంద్రం — పక్సీనియా అరాకిడిస్"},
+    rootCause:{en:"Airborne urediniospores and volunteer plants; moderate temperatures with leaf wetness favour infection.",te:"గాలిలోని యురిడినియోస్పోర్లు మరియు స్వచ్ఛంద మొక్కలు; మధ్యస్థ ఉష్ణోగ్రత + ఆకు తడి సంక్రమణకు అనుకూలం."},
+    treatment:{en:"Apply hexaconazole or wettable sulfur when pustules appear, use tolerant varieties.",te:"పస్టూల్స్ కనిపించినప్పుడు హెక్సాకొనజోల్ వాడండి; సహన రకాలు వాడండి."}
+  },
+  pulsesPowderyMildew:{
+    name:{en:"Powdery Mildew",te:"పప్పు బూజు తెగులు"},
+    pathogen:{en:"Fungus — Erysiphe / Podosphaera spp.",te:"శిలీంద్రం — ఎరిసిఫే / పోడోస్ఫేరా"},
+    rootCause:{en:"Dense sowing, moderate temperatures, and dry days with dew at night; excess N softens tissue.",te:"సాంద్ర విత్తనం, మధ్యస్థ ఉష్ణోగ్రత, పొడి పగళ్లు + రాత్రి మంచు; అధిక నత్రజని కణజాలాన్ని మృదువుగా చేస్తుంది."},
+    treatment:{en:"Spray wettable sulfur, avoid dense sowing, sow tolerant varieties.",te:"సల్ఫర్ మందు వాడండి; సాంద్రత తగ్గించండి."}
+  },
+  pulsesRust:{
+    name:{en:"Rust",te:"పప్పు తుప్పు తెగులు"},
+    pathogen:{en:"Fungus — Uromyces spp.",te:"శిలీంద్రం — యురోమైసెస్"},
+    rootCause:{en:"Cool humid weather and late sowing; urediniospores move on wind from nearby infected fields.",te:"చల్లని తేమ వాతావరణం మరియు ఆలస్య విత్తనం; సమీప సోకిన పొలాల నుండి స్పోర్లు వస్తాయి."},
+    treatment:{en:"Apply a triazole fungicide at first pustules, avoid late sowing.",te:"తొలి దశలో ట్రయజోల్ మందు వాడండి; ఆలస్యంగా విత్తడం మానండి."}
+  },
+  pulsesLeafSpot:{
+    name:{en:"Leaf Spot",te:"పప్పు ఆకుమచ్చ తెగులు"},
+    pathogen:{en:"Fungus — Cercospora / Alternaria spp.",te:"శిలీంద్రం — సెర్కోస్పోరా / ఆల్టర్నేరియా"},
+    rootCause:{en:"Infected seed and crop debris; warm wet conditions allow repeated infection cycles on leaves.",te:"సోకిన విత్తనం మరియు పంట అవశేషాలు; వెచ్చని తడి పరిస్థితులు ఆకులపై మళ్లీ మళ్లీ సంక్రమణకు అనుమతిస్తాయి."},
+    treatment:{en:"Apply mancozeb, use certified seed, rotate crops.",te:"మాంకోజెబ్ మందు వాడండి; ధృవీకరించిన విత్తనం వాడండి."}
+  },
+  vegPowderyMildew:{
+    name:{en:"Powdery Mildew",te:"కూరగాయల బూజు తెగులు"},
+    pathogen:{en:"Fungus — Erysiphe / Sphaerotheca / Leveillula spp.",te:"శిలీంద్రం — ఎరిసిఫే / స్ఫెరోథీకా"},
+    rootCause:{en:"Dense planting and moderate temperatures with dry days; spores germinate without free water on leaf surface.",te:"సాంద్ర నాటు మరియు మధ్యస్థ ఉష్ణోగ్రత + పొడి పగళ్లు; ఆకు ఉపరితలంపై నీరు లేకుండానే స్పోర్లు మొలకెత్తుతాయి."},
+    treatment:{en:"Spray sulfur or a triazole fungicide, increase plant spacing for airflow.",te:"సల్ఫర్ మందు వాడండి; మొక్కల మధ్య దూరం పెంచండి."}
+  },
+  vegBlight:{
+    name:{en:"Blight",te:"కూరగాయల ఎండు తెగులు"},
+    pathogen:{en:"Fungus / Oomycete — Alternaria, Phytophthora or related",te:"శిలీంద్రం / ఊమైసీట్ — ఆల్టర్నేరియా, ఫైటోఫ్తోరా"},
+    rootCause:{en:"Prolonged leaf wetness, overhead watering, and infected debris; spores and sporangia splash between plants.",te:"ఎక్కువసేపు ఆకు తడి, పైనుండి నీరు, సోకిన అవశేషాలు; స్పోర్లు మొక్కల మధ్య చిమ్ముతాయి."},
+    treatment:{en:"Apply a copper-based or mancozeb fungicide, avoid overhead watering, remove infected leaves.",te:"కాపర్/మాంకోజెబ్ మందు వాడండి; పైనుండి నీరు పెట్టడం మానండి."}
+  },
+  vegLeafSpot:{
+    name:{en:"Leaf Spot",te:"కూరగాయల ఆకుమచ్చ తెగులు"},
+    pathogen:{en:"Fungus / Bacterium — Cercospora, Xanthomonas or related",te:"శిలీంద్రం / బాక్టీరియం — సెర్కోస్పోరా, జాంతోమోనాస్"},
+    rootCause:{en:"Wet foliage, crowded plants, and contaminated tools or seed; pathogens enter through stomata and wounds.",te:"తడి ఆకులు, గుంపు మొక్కలు, కలుషిత పనిముట్లు లేదా విత్తనం; వ్యాధికారకాలు స్టోమాటా మరియు గాయాల ద్వారా ప్రవేశిస్తాయి."},
+    treatment:{en:"Remove affected leaves, apply chlorothalonil, avoid working in wet fields.",te:"ప్రభావిత ఆకులను తొలగించండి; క్లోరోథలోనిల్ మందు వాడండి."}
+  },
+  vegMosaicVirus:{
+    name:{en:"Mosaic Virus",te:"మొజాయిక్ వైరస్"},
+    pathogen:{en:"Virus — Tobamovirus / Potyvirus group (aphid or whitefly vectored)",te:"వైరస్ — టొబామో/పోటీ వైరస్ సమూహం (పేనుబంక/తెల్లదోమ వాహకం)"},
+    rootCause:{en:"Aphids or whiteflies transmit virus from infected weeds and crops; mechanical spread via tools also possible.",te:"పేనుబంక లేదా తెల్లదోమ సోకిన కలుపు మరియు పంటల నుండి వైరస్‌ను ప్రసారం చేస్తాయి; పనిముట్ల ద్వారా కూడా వ్యాప్తి."},
+    treatment:{en:"Control aphid/whitefly vectors, remove and destroy infected plants, use virus-free seedlings.",te:"పేనుబంక/తెల్లదోమను నియంత్రించండి; వ్యాధిగ్రస్త మొక్కలను తొలగించండి."}
+  }
+};
+
+const DISEASE_LEAF_KEYWORDS = [
+  'leaf','plant','vine','vegetable','crop','maize','corn','hay','head cabbage',
+  'cauliflower','broccoli','artichoke','rapeseed','daisy','fig','custard apple',
+  'grass','wheat','rice','cotton','sugar','cane','peanut','groundnut','bean',
+  'pea','pulse','foliage','stem','shoot','seedling','farm','agriculture',
+  'herb','weed','flower','ear','squash','cucumber'
+];
+
+// Map MobileNet ImageNet class names → our supported crop list (best-effort).
+// Used to auto-suggest or warn when the photo looks like a different crop.
+const MOBILENET_TO_CROP = [
+  {keys:['maize','corn','ear'], crop:'Maize'},
+  {keys:['wheat','hay'], crop:'Wheat'},
+  {keys:['cabbage','cauliflower','broccoli','head cabbage','artichoke','rapeseed'], crop:'Vegetables'},
+  {keys:['squash','cucumber','bell pepper','mushroom'], crop:'Vegetables'},
+  {keys:['strawberry','banana','orange','lemon','pineapple','fig','pomegranate','custard apple'], crop:'Vegetables'},
+  {keys:['daisy',"yellow lady's slipper"], crop:'Vegetables'},
+  {keys:['cotton'], crop:'Cotton'},
+  {keys:['peanut','groundnut'], crop:'Groundnut'},
+  {keys:['bean','pea','pulse'], crop:'Pulses'},
+  {keys:['sugar','cane'], crop:'Sugarcane'},
+  {keys:['rice'], crop:'Rice'}
+];
+
+function detectCropFromMobileNet(predictions){
+  if(!predictions || !predictions.length) return null;
+  for(const pred of predictions.slice(0,5)){
+    const lower = (pred.className || '').toLowerCase();
+    for(const map of MOBILENET_TO_CROP){
+      if(map.keys.some(k => lower.includes(k))) return map.crop;
+    }
+  }
+  return null;
 }
-function phStatus(ph){
-  if(ph < 6.5) return "Acidic";
-  if(ph <= 7.5) return "Neutral";
-  return "Alkaline";
+
+function classifyLeafPixels(dataUrl, callback){
+  const img = new Image();
+  img.onload = function(){
+    try{
+      const size=110, canvas=document.createElement('canvas');
+      canvas.width=size; canvas.height=size;
+      const ctx=canvas.getContext('2d');
+      ctx.drawImage(img,0,0,size,size);
+      const data=ctx.getImageData(0,0,size,size).data;
+      let total=0, greenCount=0, yellowCount=0, brownCount=0, whiteCount=0, darkCount=0;
+      let rSum=0,gSum=0,bSum=0;
+      for(let i=0;i<data.length;i+=4){
+        const r=data[i],g=data[i+1],b=data[i+2];
+        rSum+=r; gSum+=g; bSum+=b; total++;
+        const {h,s,v}=rgbToHsv(r,g,b);
+        if((h>=55&&h<=165)&&s>0.20&&v>0.15&&v<0.92) greenCount++;
+        else if((h>=38&&h<=65)&&s>0.28&&v>0.35) yellowCount++;
+        else if(((h>=6&&h<=37)||(h>=350))&&s>0.20&&s<0.85&&v>0.15&&v<0.60) brownCount++;
+        else if(s<0.16&&v>0.55) whiteCount++;
+        else if(v<0.24) darkCount++;
+      }
+      const r=Math.round(rSum/total), g=Math.round(gSum/total), b=Math.round(bSum/total);
+      const brightness=Math.round((r+g+b)/3);
+      const symptoms = {
+        green: greenCount/total, yellow: yellowCount/total, brown: brownCount/total,
+        white: whiteCount/total, dark: darkCount/total
+      };
+      const anomaly = symptoms.yellow + symptoms.brown + symptoms.white + symptoms.dark;
+      // Slightly lower threshold so photos of other crops / mixed foliage are accepted
+      const looksLikeFoliage = (symptoms.green + anomaly) > 0.22;
+      callback({looksLikeFoliage, symptoms, anomaly, brightness, r, g, b});
+    }catch(e){ callback({looksLikeFoliage:false, symptoms:null, anomaly:0}); }
+  };
+  img.onerror = () => callback({looksLikeFoliage:false, symptoms:null, anomaly:0});
+  img.src = dataUrl;
 }
-function adjustFactor(level){
-  return {Low:1.25, Medium:1.0, High:0.5}[level];
+
+function diagnoseCrop(crop, symptoms, anomaly){
+  if(anomaly < 0.08 || symptoms.green > 0.55 && anomaly < 0.12){
+    return {healthy:true};
+  }
+  const candidates = DISEASE_DB[crop] || [];
+  let best=null, bestScore=-1;
+  candidates.forEach(c => {
+    const domPct = symptoms[c.dominant] || 0;
+    const secPct = symptoms[c.secondary] || 0;
+    const score = domPct*0.75 + secPct*0.25;
+    if(score > bestScore){ bestScore=score; best=c; }
+  });
+  if(!best || bestScore < 0.05) return {healthy:true};
+  const confidence = Math.round(Math.min(90, 38 + bestScore*220));
+  const severity = anomaly < 0.15 ? 'Mild' : anomaly < 0.30 ? 'Moderate' : 'High';
+  return {healthy:false, disease:best, confidence, severity};
 }
+
+const CROP_GRD = {
+  Rice:{N:48,P:24,K:24}, Wheat:{N:48,P:24,K:16}, Maize:{N:60,P:30,K:20}, Cotton:{N:40,P:20,K:20},
+  Sugarcane:{N:100,P:40,K:40}, Groundnut:{N:10,P:20,K:20}, Pulses:{N:8,P:20,K:12}, Vegetables:{N:50,P:25,K:25}
+};
+
+// ---------------- Disease Scan: UI wiring ----------------
+let currentDiseasePhotoDataUrl = null, currentDiseasePhotoName = null, currentDiseaseAnalysis = null, lastDiseaseContext = null;
+const diseaseCropSelect = document.getElementById('diseaseCrop');
+const diseasePhotoDrop = document.getElementById('diseasePhotoDrop');
+const diseasePhotoInput = document.getElementById('diseasePhotoInput');
+const diseasePhotoPreviewWrap = document.getElementById('diseasePhotoPreviewWrap');
+const diseasePhotoPreviewImg = document.getElementById('diseasePhotoPreviewImg');
+const diseasePhotoFileName = document.getElementById('diseasePhotoFileName');
+const diseasePhotoRemoveBtn = document.getElementById('diseasePhotoRemoveBtn');
+const diseasePhotoError = document.getElementById('err-diseasePhoto');
+const diseasePhotoAnalyzing = document.getElementById('diseasePhotoAnalyzing');
+const diseaseSubmitBtn = document.getElementById('diseaseSubmitBtn');
+
+function showDiseasePhotoError(msg){ diseasePhotoError.textContent = msg; diseasePhotoError.classList.add('show'); diseasePhotoDrop.classList.add('invalid-drop'); }
+function clearDiseasePhotoError(){ diseasePhotoError.textContent = ''; diseasePhotoError.classList.remove('show'); diseasePhotoDrop.classList.remove('invalid-drop'); }
+
+async function handleDiseasePhotoFile(file){
+  clearDiseasePhotoError();
+  // Clear any previous crop mismatch / auto-set banner
+  const cropHint = document.getElementById('diseaseCropHint');
+  if(cropHint){ cropHint.classList.remove('show'); cropHint.textContent = ''; }
+
+  if(!file) return;
+  if(!file.type.startsWith('image/')){ showDiseasePhotoError(t('photoTypeError')); diseasePhotoInput.value=''; return; }
+  if(file.size > MAX_PHOTO_BYTES){ showDiseasePhotoError(t('photoSizeError',{size:(file.size/(1024*1024)).toFixed(1)})); diseasePhotoInput.value=''; return; }
+
+  const reader = new FileReader();
+  reader.onerror = () => showDiseasePhotoError(t('photoReadError'));
+  reader.onload = async function(e){
+    const dataUrl = e.target.result;
+    diseasePhotoAnalyzing.classList.add('show');
+    diseaseSubmitBtn.disabled = true;
+
+    let imgEl, mnResult;
+    try{
+      imgEl = await loadImageElement(dataUrl);
+      mnResult = await classifyWithMobileNet(imgEl);
+    }catch(err){
+      diseasePhotoAnalyzing.classList.remove('show');
+      showDiseasePhotoError(t('rejUnreadable'));
+      diseasePhotoInput.value = '';
+      return;
+    }
+
+    // Only reject if MobileNet is confident it is a non-plant object AND no crop/leaf signal.
+    // This allows photos of other crops that the color heuristic alone might miss.
+    if(mnResult.looksNonSoil && !mnResult.looksLikeCrop){
+      diseasePhotoAnalyzing.classList.remove('show');
+      currentDiseasePhotoDataUrl = null; currentDiseasePhotoName = null; currentDiseaseAnalysis = null;
+      diseasePhotoInput.value = '';
+      showDiseasePhotoError(t('diseaseRejNotLeaf') + `  [detected: ${mnResult.topClass}]`);
+      return;
+    }
+
+    classifyLeafPixels(dataUrl, function(pixelResult){
+      diseasePhotoAnalyzing.classList.remove('show');
+      // Accept if either the pixel heuristic OR MobileNet sees plant/crop evidence.
+      // This is the key change so a photo of another crop is not rejected.
+      const passes = pixelResult.looksLikeFoliage || mnResult.looksLikeCrop;
+      if(!passes){
+        currentDiseasePhotoDataUrl = null; currentDiseasePhotoName = null; currentDiseaseAnalysis = null;
+        diseasePhotoInput.value = '';
+        showDiseasePhotoError(t('diseaseRejNotLeaf'));
+        return;
+      }
+
+      // Best-effort crop auto-detection from MobileNet
+      const detectedCrop = detectCropFromMobileNet(mnResult.predictions);
+      const selectedCrop = diseaseCropSelect.value;
+      let cropHintMsg = '';
+
+      if(detectedCrop){
+        if(detectedCrop !== selectedCrop){
+          // Auto-switch to the detected crop so the correct disease list is used
+          diseaseCropSelect.value = detectedCrop;
+          cropHintMsg = t('diseaseCropAutoSet', {crop: t(CROP_KEY_MAP[detectedCrop] || detectedCrop)});
+          if(selectedCrop && selectedCrop !== detectedCrop){
+            cropHintMsg += ' — ' + t('diseaseCropMismatch', {
+              detected: t(CROP_KEY_MAP[detectedCrop] || detectedCrop),
+              selected: t(CROP_KEY_MAP[selectedCrop] || selectedCrop)
+            });
+          }
+        } else {
+          cropHintMsg = t('diseaseCropAutoSet', {crop: t(CROP_KEY_MAP[detectedCrop] || detectedCrop)});
+        }
+      }
+
+      currentDiseasePhotoDataUrl = dataUrl;
+      currentDiseasePhotoName = file.name;
+      currentDiseaseAnalysis = {
+        ...pixelResult,
+        mobilenet: {topClass: mnResult.topClass, topProb: mnResult.topProb, predictions: mnResult.predictions},
+        detectedCrop: detectedCrop || null
+      };
+      diseasePhotoPreviewImg.src = dataUrl;
+      diseasePhotoFileName.textContent = file.name;
+      diseasePhotoPreviewWrap.style.display = 'block';
+      diseasePhotoDrop.style.display = 'none';
+      diseaseSubmitBtn.disabled = false;
+
+      if(cropHintMsg){
+        let hintEl = document.getElementById('diseaseCropHint');
+        if(!hintEl){
+          hintEl = document.createElement('div');
+          hintEl.id = 'diseaseCropHint';
+          hintEl.className = 'auto-fill-msg';
+          diseasePhotoPreviewWrap.parentNode.insertBefore(hintEl, diseasePhotoPreviewWrap.nextSibling);
+        }
+        hintEl.textContent = cropHintMsg;
+        hintEl.classList.add('show');
+      }
+    });
+  };
+  reader.readAsDataURL(file);
+}
+
+diseasePhotoInput.addEventListener('change', e => { if(e.target.files?.[0]) handleDiseasePhotoFile(e.target.files[0]); });
+['dragover','dragenter'].forEach(evt => diseasePhotoDrop.addEventListener(evt, e => { e.preventDefault(); diseasePhotoDrop.classList.add('dragover'); }));
+['dragleave','drop'].forEach(evt => diseasePhotoDrop.addEventListener(evt, e => { e.preventDefault(); diseasePhotoDrop.classList.remove('dragover'); }));
+diseasePhotoDrop.addEventListener('drop', e => { e.preventDefault(); if(e.dataTransfer.files?.[0]) handleDiseasePhotoFile(e.dataTransfer.files[0]); });
+diseasePhotoRemoveBtn.addEventListener('click', () => {
+  currentDiseasePhotoDataUrl = null; currentDiseasePhotoName = null; currentDiseaseAnalysis = null;
+  diseasePhotoInput.value = ''; clearDiseasePhotoError(); diseasePhotoAnalyzing.classList.remove('show');
+  diseasePhotoPreviewWrap.style.display = 'none'; diseasePhotoDrop.style.display = 'block';
+  diseaseSubmitBtn.disabled = true;
+  const hintEl = document.getElementById('diseaseCropHint');
+  if(hintEl){ hintEl.classList.remove('show'); hintEl.textContent = ''; }
+});
+diseaseCropSelect.addEventListener('change', () => { if(lastDiseaseContext) renderDiseaseReport(diagnoseAndBuildContext()); });
+
+function diagnoseAndBuildContext(){
+  const crop = diseaseCropSelect.value;
+  const a = currentDiseaseAnalysis;
+  const result = a?.symptoms ? diagnoseCrop(crop, a.symptoms, a.anomaly) : {healthy:true};
+  return {crop, analysis:a, result};
+}
+
+function severityKey(sev){ return {Mild:'severityMild',Moderate:'severityModerate',High:'severityHigh'}[sev] || 'severityNone'; }
+
+function renderDiseaseReport(ctx){
+  const {crop, analysis, result} = ctx;
+  document.getElementById('diseasePlaceholder').style.display = 'none';
+  const resultsDiv = document.getElementById('diseaseResults');
+  resultsDiv.style.display = 'block';
+  const cropLabel = t(CROP_KEY_MAP[crop]||crop);
+  const photoHtml = currentDiseasePhotoDataUrl ? `<img class="report-photo" src="${currentDiseasePhotoDataUrl}">` : '';
+  const mn = analysis?.mobilenet;
+  const detected = analysis?.detectedCrop;
+  const detectedLabel = detected ? t(CROP_KEY_MAP[detected]||detected) : null;
+  let mnLine = mn ? `<div class="vc-detail" style="margin-top:2px;"><strong>MobileNet CNN:</strong> "${mn.topClass}" (${(mn.topProb*100).toFixed(0)}% ${t('diseaseConfidence')})</div>` : '';
+  if(detectedLabel){
+    mnLine += `<div class="vc-detail"><strong>AI crop guess:</strong> ${detectedLabel}${detected !== crop ? ' → using selected: '+cropLabel : ''}</div>`;
+  }
+
+  let symptomRows = '';
+  if(analysis?.symptoms){
+    const s = analysis.symptoms;
+    symptomRows = `
+      <div class="vc-row" style="margin-top:6px;"><span>${t('symYellow')}</span><strong style="margin-left:auto">${Math.round(s.yellow*100)}%</strong></div>
+      <div class="vc-row"><span>${t('symBrown')}</span><strong style="margin-left:auto">${Math.round(s.brown*100)}%</strong></div>
+      <div class="vc-row"><span>${t('symWhite')}</span><strong style="margin-left:auto">${Math.round(s.white*100)}%</strong></div>
+      <div class="vc-row"><span>${t('symDark')}</span><strong style="margin-left:auto">${Math.round(s.dark*100)}%</strong></div>`;
+  }
+
+  let bodyHtml;
+  if(result.healthy){
+    bodyHtml = `<div class="visual-card">
+      <div class="vc-head"><h3>${t('diseaseHealthyTitle')}</h3><span class="badge-detected" style="background:var(--moss-dark)">${cropLabel}</span></div>
+      ${mnLine}
+      <div class="vc-row" style="margin-top:8px;"><span>${t('diseaseLevelTitle')}</span><strong style="margin-left:auto;color:var(--moss-dark)">${t('severityNone')}</strong></div>
+      <div class="vc-head" style="margin-top:12px;font-size:0.85em;color:#6b5c48;font-weight:600;">${t('diseaseRootCauseTitle')}</div>
+      <p style="font-size:0.9em;line-height:1.5;color:#463a2c;margin-top:4px;">${t('diseaseHealthyRoot')}</p>
+      <div class="vc-head" style="margin-top:12px;font-size:0.85em;color:#6b5c48;font-weight:600;">${t('diseaseSymptomsTitle')}</div>
+      ${symptomRows}
+      <div class="vc-detail">${t('diseaseModelDisclaimer')}</div>
+    </div>`;
+  } else {
+    const d = result.disease;
+    const di = DISEASE_I18N[d.id];
+    const sevColor = {Mild:'var(--wheat)',Moderate:'var(--clay)',High:'var(--clay)'}[result.severity] || 'var(--moss-dark)';
+    const sevDescKey = {Mild:'diseaseLevelMildDesc',Moderate:'diseaseLevelModerateDesc',High:'diseaseLevelHighDesc'}[result.severity] || 'diseaseLevelMildDesc';
+    bodyHtml = `<div class="visual-card">
+      <div class="vc-head"><h3>${di.name[currentLang]||di.name.en}</h3><span class="badge-detected">${cropLabel}</span></div>
+      ${mnLine}
+      <div class="vc-row" style="margin-top:8px;"><span>${t('diseaseConfidence')}</span><strong style="margin-left:auto">${result.confidence}%</strong></div>
+      <div class="vc-row"><span>${t('diseaseLevelTitle')}</span><strong style="margin-left:auto;color:${sevColor}">${t(severityKey(result.severity))}</strong></div>
+      <p style="font-size:0.82em;color:#6b5c48;margin:4px 0 0;line-height:1.45;">${t(sevDescKey)}</p>
+      <div class="vc-head" style="margin-top:14px;font-size:0.85em;color:#6b5c48;font-weight:600;">${t('diseaseRootCauseTitle')}</div>
+      <div class="vc-row" style="margin-top:4px;"><span>${t('diseasePathogenLabel')}</span><strong style="margin-left:auto;font-size:0.88em;">${di.pathogen[currentLang]||di.pathogen.en}</strong></div>
+      <p style="font-size:0.9em;line-height:1.5;color:#463a2c;margin-top:6px;">${di.rootCause[currentLang]||di.rootCause.en}</p>
+      <div class="vc-head" style="margin-top:12px;font-size:0.85em;color:#6b5c48;font-weight:600;">${t('diseaseSymptomsTitle')}</div>
+      ${symptomRows}
+      <h3 style="font-size:1em;margin-top:16px;color:var(--moss-dark)">${t('diseaseTreatmentTitle')}</h3>
+      <p style="font-size:0.9em;line-height:1.5;color:#463a2c;margin-top:6px;">${di.treatment[currentLang]||di.treatment.en}</p>
+      <div class="vc-detail" style="margin-top:10px;">${t('diseaseModelDisclaimer')}</div>
+    </div>`;
+  }
+  resultsDiv.innerHTML = `${photoHtml}${bodyHtml}`;
+}
+
+document.getElementById('diseaseForm').addEventListener('submit', function(e){
+  e.preventDefault();
+  if(!currentDiseasePhotoDataUrl || !currentDiseaseAnalysis){
+    showDiseasePhotoError(t('diseaseSelectCropFirst'));
+    return;
+  }
+  const ctx = diagnoseAndBuildContext();
+  lastDiseaseContext = ctx;
+  renderDiseaseReport(ctx);
+});
+function classify(v,low,high){ return v<low?"Low":v<high?"Medium":"High"; }
+function phStatus(ph){ return ph<6.5?"Acidic":ph<=7.5?"Neutral":"Alkaline"; }
+function adjustFactor(l){ return {Low:1.25,Medium:1.0,High:0.5}[l]; }
 function healthScore(levels){
-  const w = {Low:0.3, Medium:0.7, High:1.0};
-  const avg = levels.reduce((s,l) => s + w[l], 0) / levels.length;
-  return Math.round(avg * 1000) / 10;
+  const w={Low:0.3,Medium:0.7,High:1.0};
+  return Math.round(levels.reduce((s,l)=>s+w[l],0)/levels.length*1000)/10;
 }
-function buildNotes(levels, phStat, OC){
-  const notes = [];
-  if(levels.N === "Low") notes.push("Nitrogen is low — split urea application into 2-3 doses to reduce leaching loss.");
-  if(levels.P === "Low") notes.push("Phosphorus is low — apply DAP at sowing time, placed near root zone.");
-  if(levels.K === "Low") notes.push("Potassium is low — apply MOP in split doses, especially before flowering stage.");
-  if(phStat === "Acidic") notes.push("Soil is acidic — apply agricultural lime a few weeks before sowing to raise pH.");
-  if(phStat === "Alkaline") notes.push("Soil is alkaline — apply gypsum and use acid-forming fertilizers like ammonium sulfate.");
-  if(OC < 0.5) notes.push("Organic carbon is low — add farmyard manure or compost (5-10 tons/acre) to improve soil structure.");
-  if(notes.length === 0) notes.push("Soil is in good condition. Maintain current practices with balanced fertilization.");
+function buildNoteKeys(levels,phStat,OC,photoAnalysis){
+  const notes=[];
+  if(levels.N==="Low") notes.push({key:"noteNLow"});
+  if(levels.P==="Low") notes.push({key:"notePLow"});
+  if(levels.K==="Low") notes.push({key:"noteKLow"});
+  if(phStat==="Acidic") notes.push({key:"noteAcidic"});
+  if(phStat==="Alkaline") notes.push({key:"noteAlkaline"});
+  if(OC<0.5) notes.push({key:"noteLowOC"});
+  if(photoAnalysis?.colorKey) notes.push({key:"noteVisualScan",visualKey:photoAnalysis.colorKey});
+  if(photoAnalysis?.predicted) notes.push({key:"noteAiUsed"});
+  if(notes.length===0) notes.push({key:"noteGood"});
   return notes;
 }
-
-function recommend(crop, N, P, K, pH, OC){
-  const nLevel = classify(N, 280, 560);
-  const pLevel = classify(P, 10, 25);
-  const kLevel = classify(K, 110, 280);
-  const phStat = phStatus(pH);
-
-  const grd = CROP_GRD[crop];
-  const recN = grd.N * adjustFactor(nLevel);
-  const recP = grd.P * adjustFactor(pLevel);
-  const recK = grd.K * adjustFactor(kLevel);
-
-  const dapKg = recP / 0.46;
-  const dapNContrib = dapKg * 0.18;
-  const ureaKg = Math.max(recN - dapNContrib, 0) / 0.46;
-  const mopKg = recK / 0.60;
-
+function translateNote(note){
+  if(note.key==='noteVisualScan'){
+    const vk=VISUAL_KEY_MAP[note.visualKey];
+    return t('noteVisualScan',{label:t(vk.label).toLowerCase(),hint:t(vk.hint)});
+  }
+  return t(note.key);
+}
+function recommend(crop,N,P,K,pH,OC,photoAnalysis){
+  const nLevel=classify(N,280,560), pLevel=classify(P,10,25), kLevel=classify(K,110,280);
+  const phStat=phStatus(pH);
+  const grd=CROP_GRD[crop];
+  const recN=grd.N*adjustFactor(nLevel), recP=grd.P*adjustFactor(pLevel), recK=grd.K*adjustFactor(kLevel);
+  const dapKg=recP/0.46, dapN=dapKg*0.18;
+  const ureaKg=Math.max(recN-dapN,0)/0.46, mopKg=recK/0.60;
   return {
-    levels: {N: nLevel, P: pLevel, K: kLevel},
-    phStat,
-    score: healthScore([nLevel, pLevel, kLevel]),
-    dosage: {
-      urea: Math.round(ureaKg * 10) / 10,
-      dap: Math.round(dapKg * 10) / 10,
-      mop: Math.round(mopKg * 10) / 10,
-    },
-    lime: phStat === "Acidic",
-    gypsum: phStat === "Alkaline",
-    notes: buildNotes({N:nLevel, P:pLevel, K:kLevel}, phStat, OC),
+    levels:{N:nLevel,P:pLevel,K:kLevel}, phStat,
+    score:healthScore([nLevel,pLevel,kLevel]),
+    dosage:{urea:Math.round(ureaKg*10)/10, dap:Math.round(dapKg*10)/10, mop:Math.round(mopKg*10)/10},
+    lime:phStat==="Acidic", gypsum:phStat==="Alkaline",
+    noteKeys:buildNoteKeys({N:nLevel,P:pLevel,K:kLevel},phStat,OC,photoAnalysis)
   };
 }
 
-// ---------- session-only history ----------
-const sessionHistory = [];
-
+const sessionHistory=[];
 function renderHistory(){
-  const body = document.getElementById('historyBody');
-  if(sessionHistory.length === 0){
-    body.innerHTML = `<div class="empty-state"><div class="glyph">📋</div>No soil tests generated yet in this session.</div>`;
-    return;
-  }
-  let rows = sessionHistory.map(h => `
-    <tr>
-      <td>${h.photo ? `<img class="hist-thumb" src="${h.photo}" alt="soil photo">` : `<span class="hist-thumb-empty"></span>`}</td>
-      <td class="mono">${h.time}</td>
-      <td>${h.crop}</td>
-      <td class="status-${h.levels.N}">${h.levels.N}</td>
-      <td class="status-${h.levels.P}">${h.levels.P}</td>
-      <td class="status-${h.levels.K}">${h.levels.K}</td>
+  const body=document.getElementById('historyBody');
+  if(sessionHistory.length===0){ body.innerHTML=`<div class="empty-state"><div class="glyph">📋</div>${t('historyEmpty')}</div>`; return; }
+  const rows=sessionHistory.map(h=>{
+    const cropLabel=t(CROP_KEY_MAP[h.crop]||h.crop);
+    const visualText=h.visualKey?t(VISUAL_KEY_MAP[h.visualKey].label):'—';
+    return `<tr>
+      <td>${h.photo?`<img class="hist-thumb" src="${h.photo}">`:`<span class="hist-thumb-empty"></span>`}</td>
+      <td class="mono">${h.time}</td><td>${cropLabel}</td>
+      <td class="status-${h.levels.N}">${t(STATUS_KEY_MAP[h.levels.N])}</td>
+      <td class="status-${h.levels.P}">${t(STATUS_KEY_MAP[h.levels.P])}</td>
+      <td class="status-${h.levels.K}">${t(STATUS_KEY_MAP[h.levels.K])}</td>
       <td><strong>${h.score}</strong></td>
       <td class="mono">${h.dosage.urea} / ${h.dosage.dap} / ${h.dosage.mop}</td>
-    </tr>
-  `).join('');
-  body.innerHTML = `
-    <table>
-      <tr><th>Photo</th><th>Time</th><th>Crop</th><th>N</th><th>P</th><th>K</th><th>Score</th><th>Urea/DAP/MOP kg-acre</th></tr>
-      ${rows}
-    </table>
-  `;
+      <td>${visualText}</td></tr>`;
+  }).join('');
+  body.innerHTML=`<table><tr><th>${t('histPhoto')}</th><th>${t('histTime')}</th><th>${t('histCrop')}</th><th>N</th><th>P</th><th>K</th><th>${t('histScore')}</th><th>${t('histDosage')}</th><th>${t('histVisual')}</th></tr>${rows}</table>`;
+}
+
+function renderReport(ctx){
+  const {crop,N,P,K,pH,OC,r,photoDataUrl,photoAnalysis}=ctx;
+  document.getElementById('placeholder').style.display='none';
+  const resultsDiv=document.getElementById('results'); resultsDiv.style.display='block';
+  const scoreColor=r.score>=75?'var(--moss-dark)':r.score>=50?'var(--wheat)':'var(--clay)';
+  let amendHtml='';
+  if(r.lime) amendHtml+=`<span class="amend-tag">${t('amendLime')}</span>`;
+  if(r.gypsum) amendHtml+=`<span class="amend-tag">${t('amendGypsum')}</span>`;
+  const photoHtml=photoDataUrl?`<img class="report-photo" src="${photoDataUrl}">`:'';
+
+  let visualCardHtml='';
+  if(photoAnalysis?.colorKey){
+    const swatch=`rgb(${photoAnalysis.r},${photoAnalysis.g},${photoAnalysis.b})`;
+    const vk=VISUAL_KEY_MAP[photoAnalysis.colorKey];
+    const pred=photoAnalysis.predicted;
+    let predGrid='';
+    if(pred){
+      predGrid=`<div style="margin-top:12px;font-size:0.82em;font-weight:600;color:var(--moss-dark);">${t('aiPredTitle')}</div>
+        <div class="ai-pred-grid">
+          <div class="ai-pred-item"><div class="p-label">N</div><div class="p-val">${pred.N}</div></div>
+          <div class="ai-pred-item"><div class="p-label">P</div><div class="p-val">${pred.P}</div></div>
+          <div class="ai-pred-item"><div class="p-label">K</div><div class="p-val">${pred.K}</div></div>
+          <div class="ai-pred-item"><div class="p-label">pH</div><div class="p-val">${pred.pH}</div></div>
+          <div class="ai-pred-item"><div class="p-label">OC %</div><div class="p-val">${pred.OC}</div></div>
+        </div>`;
+    }
+    const mn = photoAnalysis.mobilenet;
+    const mnLine = mn ? `<div class="vc-detail" style="margin-top:2px;"><strong>MobileNet CNN:</strong> "${mn.topClass}" (${(mn.topProb*100).toFixed(0)}% confidence)</div>` : '';
+    visualCardHtml=`<div class="visual-card">
+      <div class="vc-head"><h3>${t('visualCardTitle')}</h3><span class="badge-detected">${t('visualBadge')}</span></div>
+      ${mnLine}
+      <div class="vc-row"><span class="color-swatch" style="background:${swatch}"></span>
+        <span><strong>${t(vk.label)}</strong> · ${t('visualBrightness')} ${photoAnalysis.brightness}/255</span></div>
+      ${predGrid}
+      <div class="vc-detail">${t(vk.hint)} ${t('visualDisclaimer')}</div>
+    </div>`;
+  }
+
+  const cropLabel=t(CROP_KEY_MAP[crop]||crop);
+  const phLabel=t(PH_KEY_MAP[r.phStat]||r.phStat);
+  resultsDiv.innerHTML=`${photoHtml}${visualCardHtml}
+    <p style="font-size:0.92em;color:#6b5c48;"><strong>${cropLabel}</strong> · pH ${pH.toFixed(2)} (${phLabel})</p>
+    <div class="score-strip"><div class="fill" style="width:${r.score}%;background:${scoreColor}">${r.score}</div><div class="rest" style="width:${100-r.score}%"></div></div>
+    <table><tr><th>${t('tblNutrient')}</th><th>${t('tblStatus')}</th></tr>
+      <tr><td>${t('nutN')}</td><td class="status-${r.levels.N}">${t(STATUS_KEY_MAP[r.levels.N])}</td></tr>
+      <tr><td>${t('nutP')}</td><td class="status-${r.levels.P}">${t(STATUS_KEY_MAP[r.levels.P])}</td></tr>
+      <tr><td>${t('nutK')}</td><td class="status-${r.levels.K}">${t(STATUS_KEY_MAP[r.levels.K])}</td></tr>
+    </table>${amendHtml?`<div>${amendHtml}</div>`:''}
+    <h3 style="font-size:1.05em;margin-top:18px;color:var(--moss-dark)">${t('fertRecTitle')}</h3>
+    <div class="dosage-grid">
+      <div class="dosage-card"><div class="label">Urea</div><div class="val">${r.dosage.urea} ${t('perAcre')}</div></div>
+      <div class="dosage-card"><div class="label">DAP</div><div class="val">${r.dosage.dap} ${t('perAcre')}</div></div>
+      <div class="dosage-card"><div class="label">MOP</div><div class="val">${r.dosage.mop} ${t('perAcre')}</div></div>
+    </div>
+    <h3 style="font-size:1.05em;margin-top:18px;color:var(--moss-dark)">${t('advisoryTitle')}</h3>
+    <ul class="notes">${r.noteKeys.map(n=>`<li>${translateNote(n)}</li>`).join('')}</ul>`;
 }
 
 document.getElementById('soilForm').addEventListener('submit', function(e){
   e.preventDefault();
-
-  const formBannerError = document.getElementById('formBannerError');
-  const fieldsOk = validateAllFields();
-
-  if(!fieldsOk || photoError.classList.contains('show')){
+  const formBannerError=document.getElementById('formBannerError');
+  if(!validateAllFields() || photoError.classList.contains('show')){
     formBannerError.classList.add('show');
-    const firstInvalid = document.querySelector('#soilForm input.invalid');
-    if(firstInvalid) firstInvalid.focus();
+    const first=document.querySelector('#soilForm input.invalid'); if(first) first.focus();
     return;
   }
   formBannerError.classList.remove('show');
-
-  const crop = document.getElementById('crop').value;
-  const N = parseFloat(document.getElementById('N').value);
-  const P = parseFloat(document.getElementById('P').value);
-  const K = parseFloat(document.getElementById('K').value);
-  const pH = parseFloat(document.getElementById('pH').value);
-  const OC = parseFloat(document.getElementById('OC').value);
-
-  const r = recommend(crop, N, P, K, pH, OC);
-
-  document.getElementById('placeholder').style.display = 'none';
-  const resultsDiv = document.getElementById('results');
-  resultsDiv.style.display = 'block';
-
-  const scoreColor = r.score >= 75 ? 'var(--moss-dark)' : r.score >= 50 ? 'var(--wheat)' : 'var(--clay)';
-  let amendHtml = '';
-  if(r.lime) amendHtml += '<span class="amend-tag">🧪 Lime recommended (acidic soil)</span>';
-  if(r.gypsum) amendHtml += '<span class="amend-tag">🧪 Gypsum recommended (alkaline soil)</span>';
-
-  const photoHtml = currentPhotoDataUrl
-    ? `<img class="report-photo" src="${currentPhotoDataUrl}" alt="Uploaded field photo">`
-    : '';
-
-  resultsDiv.innerHTML = `
-    ${photoHtml}
-    <p style="font-size:0.92em; color:#6b5c48;"><strong>${crop}</strong> · pH ${pH.toFixed(2)} (${r.phStat})</p>
-    <div class="score-strip">
-      <div class="fill" style="width:${r.score}%; background:${scoreColor};">${r.score}</div>
-      <div class="rest" style="width:${100 - r.score}%;"></div>
-    </div>
-    <table>
-      <tr><th>Nutrient</th><th>Status</th></tr>
-      <tr><td>Nitrogen (N)</td><td class="status-${r.levels.N}">${r.levels.N}</td></tr>
-      <tr><td>Phosphorus (P)</td><td class="status-${r.levels.P}">${r.levels.P}</td></tr>
-      <tr><td>Potassium (K)</td><td class="status-${r.levels.K}">${r.levels.K}</td></tr>
-    </table>
-    ${amendHtml ? `<div>${amendHtml}</div>` : ''}
-    <h3 style="font-size:1.05em; margin-top:18px; color:var(--moss-dark);">Fertilizer Recommendation</h3>
-    <div class="dosage-grid">
-      <div class="dosage-card"><div class="label">Urea</div><div class="val">${r.dosage.urea} kg/acre</div></div>
-      <div class="dosage-card"><div class="label">DAP</div><div class="val">${r.dosage.dap} kg/acre</div></div>
-      <div class="dosage-card"><div class="label">MOP</div><div class="val">${r.dosage.mop} kg/acre</div></div>
-    </div>
-    <h3 style="font-size:1.05em; margin-top:18px; color:var(--moss-dark);">Advisory Notes</h3>
-    <ul class="notes">${r.notes.map(n => `<li>${n}</li>`).join('')}</ul>
-  `;
-
+  const crop=document.getElementById('crop').value;
+  const N=parseFloat(document.getElementById('N').value);
+  const P=parseFloat(document.getElementById('P').value);
+  const K=parseFloat(document.getElementById('K').value);
+  const pH=parseFloat(document.getElementById('pH').value);
+  const OC=parseFloat(document.getElementById('OC').value);
+  const r=recommend(crop,N,P,K,pH,OC,currentPhotoAnalysis);
+  lastReportContext={crop,N,P,K,pH,OC,r,photoDataUrl:currentPhotoDataUrl,photoAnalysis:currentPhotoAnalysis};
+  renderReport(lastReportContext);
   sessionHistory.unshift({
-    time: new Date().toLocaleTimeString(),
-    crop, levels: r.levels, score: r.score, dosage: r.dosage,
-    photo: currentPhotoDataUrl
+    time:new Date().toLocaleTimeString(), crop, levels:r.levels, score:r.score, dosage:r.dosage,
+    photo:currentPhotoDataUrl, visualKey:currentPhotoAnalysis?.colorKey||null
   });
   renderHistory();
 });
-</script>
 
+applyStaticTranslations();
+renderHistory();
+</script>
 </body>
 </html>
